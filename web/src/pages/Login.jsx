@@ -8,7 +8,7 @@ export default function Login() {
     email: '',
     senha: '',
     nome: '',
-    perfil: 'funcionario',
+    organizacao_nome: '',
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -137,11 +137,14 @@ export default function Login() {
           {!isLogin && (
             <div style={{ marginBottom: '1rem' }}>
               <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
-                Perfil
+                Nome da Organização *
               </label>
-              <select
-                value={formData.perfil}
-                onChange={(e) => setFormData({ ...formData, perfil: e.target.value })}
+              <input
+                type="text"
+                required
+                placeholder="Ex: Minha Empresa LTDA"
+                value={formData.organizacao_nome}
+                onChange={(e) => setFormData({ ...formData, organizacao_nome: e.target.value })}
                 style={{
                   width: '100%',
                   padding: '0.5rem',
@@ -149,12 +152,10 @@ export default function Login() {
                   borderRadius: '6px',
                   fontSize: '0.875rem',
                 }}
-              >
-                <option value="funcionario">Funcionário</option>
-                <option value="almoxarife">Almoxarife</option>
-                <option value="gestor">Gestor</option>
-                <option value="admin">Administrador</option>
-              </select>
+              />
+              <p style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem' }}>
+                Você será o administrador desta organização
+              </p>
             </div>
           )}
 

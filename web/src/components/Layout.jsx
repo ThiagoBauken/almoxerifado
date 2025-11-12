@@ -16,6 +16,7 @@ export default function Layout({ children }) {
     { path: '/obras', label: 'Obras', icon: '🏗️' },
     { path: '/transfers', label: 'Transferências', icon: '🔄' },
     { path: '/users', label: 'Usuários', icon: '👥', adminOnly: true },
+    { path: '/settings', label: 'Configurações', icon: '⚙️' },
   ];
 
   const handleLogout = () => {
