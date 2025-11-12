@@ -9,7 +9,7 @@ export default function Layout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const menuItems = [
-    { path: '/', label: 'Dashboard', icon: '📊' },
+    { path: '/dashboard', label: 'Dashboard', icon: '📊' },
     { path: '/items', label: 'Itens', icon: '📦' },
     { path: '/categories', label: 'Categorias', icon: '🏷️' },
     { path: '/storage', label: 'Locais', icon: '📍' },

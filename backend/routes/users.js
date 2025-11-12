@@ -66,6 +66,29 @@ router.post('/', async (req, res) => {
       });
     }
 
+    // Verificar limites do plano
+    const orgCheck = await pool.query(
+      `SELECT o.max_usuarios, COUNT(u.id) as current_usuarios
+       FROM organizations o
+       LEFT JOIN users u ON u.organization_id = o.id
+       WHERE o.id = $1
+       GROUP BY o.id, o.max_usuarios`,
+      [req.user.organization_id]
+    );
+
+    if (orgCheck.rows.length > 0) {
+      const { max_usuarios, current_usuarios } = orgCheck.rows[0];
+      if (parseInt(current_usuarios) >= max_usuarios) {
+        return res.status(403).json({
+          success: false,
+          message: `Limite de usuários atingido (${max_usuarios}). Faça upgrade do seu plano.`,
+          limit_reached: true,
+          current: parseInt(current_usuarios),
+          max: max_usuarios,
+        });
+      }
+    }
+
     // Verificar se email já existe
     const existingUser = await pool.query(
       'SELECT id FROM users WHERE email = $1',

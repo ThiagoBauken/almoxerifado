@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Items from './pages/Items';
@@ -41,14 +42,43 @@ function PrivateRoute({ children }) {
   return user ? children : <Navigate to="/login" />;
 }
 
+function HomeRoute() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        minHeight: '100vh',
+        fontFamily: 'system-ui, -apple-system, sans-serif'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            fontSize: '3rem',
+            marginBottom: '1rem',
+          }}>
+            ⚙️
+          </div>
+          <p style={{ color: '#6b7280' }}>Carregando...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return user ? <Navigate to="/dashboard" /> : <Landing />;
+}
+
 function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
         <Routes>
+          <Route path="/" element={<HomeRoute />} />
           <Route path="/login" element={<Login />} />
           <Route path="/invite/:token" element={<AcceptInvite />} />
-          <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+          <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
           <Route path="/items" element={<PrivateRoute><Items /></PrivateRoute>} />
           <Route path="/categories" element={<PrivateRoute><Categories /></PrivateRoute>} />
           <Route path="/storage" element={<PrivateRoute><Storage /></PrivateRoute>} />

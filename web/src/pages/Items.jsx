@@ -13,6 +13,13 @@ export default function Items() {
   const [editingItem, setEditingItem] = useState(null);
   const [selectedItemForQR, setSelectedItemForQR] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filters, setFilters] = useState({
+    categoria_id: '',
+    local_armazenamento_id: '',
+    estado: '',
+    lowStockOnly: false,
+  });
+  const [showFilters, setShowFilters] = useState(false);
   const qrCanvasRef = useRef(null);
   const [formData, setFormData] = useState({
     nome: '',
@@ -36,10 +43,24 @@ export default function Items() {
     loadData();
   }, []);
 
+  // Reload data when filters or search change
+  useEffect(() => {
+    if (!loading) {
+      loadData();
+    }
+  }, [filters.categoria_id, filters.estado, searchTerm]);
+
   const loadData = async () => {
     try {
+      // Build query params for filters
+      const params = new URLSearchParams();
+      if (filters.categoria_id) params.append('categoria_id', filters.categoria_id);
+      if (filters.estado) params.append('estado', filters.estado);
+      if (searchTerm) params.append('search', searchTerm);
+      params.append('limit', '1000');
+
       const [itemsRes, categoriesRes, storageRes] = await Promise.all([
-        api.get('/items'),
+        api.get(`/items?${params.toString()}`),
         api.get('/categories'),
         api.get('/storage'),
       ]);
@@ -162,10 +183,22 @@ export default function Items() {
     }
   };
 
-  const filteredItems = items.filter(item =>
-    item.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.codigo?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredItems = items.filter(item => {
+    // Filter by storage location (client-side)
+    if (filters.local_armazenamento_id && item.local_armazenamento_id != filters.local_armazenamento_id) {
+      return false;
+    }
+
+    // Filter by low stock only
+    if (filters.lowStockOnly) {
+      const estoqueMinimo = item.estoque_minimo || 0;
+      if (estoqueMinimo === 0 || item.quantidade > estoqueMinimo) {
+        return false;
+      }
+    }
+
+    return true;
+  });
 
   return (
     <Layout>
@@ -217,7 +250,7 @@ export default function Items() {
         </div>
 
         {/* Search Bar */}
-        <div style={{ marginBottom: '1.5rem' }}>
+        <div style={{ marginBottom: '1rem' }}>
           <input
             type="text"
             placeholder="Buscar por nome ou código..."
@@ -233,6 +266,170 @@ export default function Items() {
             }}
           />
         </div>
+
+        {/* Filter Toggle Button */}
+        <div style={{ marginBottom: '1rem' }}>
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            style={{
+              padding: '0.5rem 1rem',
+              backgroundColor: showFilters ? '#2563eb' : '#f3f4f6',
+              color: showFilters ? 'white' : '#1f2937',
+              border: '1px solid #d1d5db',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '0.875rem',
+              fontWeight: '500',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+            }}
+          >
+            {showFilters ? '🔽' : '▶️'} Filtros Avançados
+          </button>
+        </div>
+
+        {/* Advanced Filters Panel */}
+        {showFilters && (
+          <div style={{
+            backgroundColor: 'white',
+            padding: '1.5rem',
+            borderRadius: '8px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+            marginBottom: '1.5rem',
+          }}>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+              gap: '1rem',
+              marginBottom: '1rem',
+            }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
+                  Categoria
+                </label>
+                <select
+                  value={filters.categoria_id}
+                  onChange={(e) => setFilters({ ...filters, categoria_id: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '6px',
+                    fontSize: '0.875rem',
+                  }}
+                >
+                  <option value="">Todas as categorias</option>
+                  {categories.map(cat => (
+                    <option key={cat.id} value={cat.id}>{cat.nome}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
+                  Local de Armazenamento
+                </label>
+                <select
+                  value={filters.local_armazenamento_id}
+                  onChange={(e) => setFilters({ ...filters, local_armazenamento_id: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '6px',
+                    fontSize: '0.875rem',
+                  }}
+                >
+                  <option value="">Todos os locais</option>
+                  {storageLocations.map(loc => (
+                    <option key={loc.id} value={loc.id}>
+                      {loc.codigo} - {loc.descricao}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
+                  Estado
+                </label>
+                <select
+                  value={filters.estado}
+                  onChange={(e) => setFilters({ ...filters, estado: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '6px',
+                    fontSize: '0.875rem',
+                  }}
+                >
+                  <option value="">Todos os estados</option>
+                  <option value="disponivel">Disponível</option>
+                  <option value="emprestado">Emprestado</option>
+                  <option value="manutencao">Manutenção</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                <label style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  fontSize: '0.875rem',
+                  fontWeight: '500',
+                  color: '#374151',
+                  cursor: 'pointer',
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={filters.lowStockOnly}
+                    onChange={(e) => setFilters({ ...filters, lowStockOnly: e.target.checked })}
+                    style={{ cursor: 'pointer' }}
+                  />
+                  Estoque baixo apenas
+                </label>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  setFilters({
+                    categoria_id: '',
+                    local_armazenamento_id: '',
+                    estado: '',
+                    lowStockOnly: false,
+                  });
+                  setSearchTerm('');
+                }}
+                style={{
+                  padding: '0.5rem 1rem',
+                  backgroundColor: '#6b7280',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '0.875rem',
+                }}
+              >
+                Limpar Filtros
+              </button>
+            </div>
+
+            <div style={{
+              marginTop: '1rem',
+              padding: '0.75rem',
+              backgroundColor: '#f3f4f6',
+              borderRadius: '6px',
+              fontSize: '0.875rem',
+              color: '#6b7280',
+            }}>
+              Mostrando {filteredItems.length} de {items.length} itens
+            </div>
+          </div>
+        )}
 
         {/* Items Table */}
         <div style={{

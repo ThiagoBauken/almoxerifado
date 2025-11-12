@@ -192,6 +192,29 @@ router.post(
       // Usar codigo se lacre não fornecido (compatibilidade)
       const codigoFinal = lacre || codigo;
 
+      // Verificar limites do plano
+      const orgCheck = await pool.query(
+        `SELECT o.max_itens, COUNT(i.id) as current_itens
+         FROM organizations o
+         LEFT JOIN items i ON i.organization_id = o.id
+         WHERE o.id = $1
+         GROUP BY o.id, o.max_itens`,
+        [req.user.organization_id]
+      );
+
+      if (orgCheck.rows.length > 0) {
+        const { max_itens, current_itens } = orgCheck.rows[0];
+        if (parseInt(current_itens) >= max_itens) {
+          return res.status(403).json({
+            success: false,
+            message: `Limite de itens atingido (${max_itens}). Faça upgrade do seu plano.`,
+            limit_reached: true,
+            current: parseInt(current_itens),
+            max: max_itens,
+          });
+        }
+      }
+
       // Verificar se codigo já existe (se fornecido)
       if (codigoFinal) {
         const codigoExists = await pool.query(
