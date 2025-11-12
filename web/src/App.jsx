@@ -3,6 +3,12 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import Items from './pages/Items';
+import Categories from './pages/Categories';
+import Storage from './pages/Storage';
+import Obras from './pages/Obras';
+import Transfers from './pages/Transfers';
+import Users from './pages/Users';
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
@@ -38,14 +44,13 @@ function App() {
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
-          <Route
-            path="/"
-            element={
-              <PrivateRoute>
-                <Dashboard />
-              </PrivateRoute>
-            }
-          />
+          <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+          <Route path="/items" element={<PrivateRoute><Items /></PrivateRoute>} />
+          <Route path="/categories" element={<PrivateRoute><Categories /></PrivateRoute>} />
+          <Route path="/storage" element={<PrivateRoute><Storage /></PrivateRoute>} />
+          <Route path="/obras" element={<PrivateRoute><Obras /></PrivateRoute>} />
+          <Route path="/transfers" element={<PrivateRoute><Transfers /></PrivateRoute>} />
+          <Route path="/users" element={<PrivateRoute><Users /></PrivateRoute>} />
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </AuthProvider>

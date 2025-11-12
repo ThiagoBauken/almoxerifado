@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
+import Layout from '../components/Layout';
 
 export default function Dashboard() {
-  const { user, logout } = useAuth();
   const [stats, setStats] = useState({
     totalItems: 0,
     lowStock: 0,
@@ -38,42 +37,8 @@ export default function Dashboard() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#f3f4f6', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
-      {/* Header */}
-      <header style={{
-        backgroundColor: 'white',
-        borderBottom: '1px solid #e5e7eb',
-        padding: '1rem 2rem',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-      }}>
-        <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#1f2937' }}>
-          🏢 Almoxarifado
-        </h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <span style={{ fontSize: '0.875rem', color: '#6b7280' }}>
-            {user?.nome} ({user?.perfil})
-          </span>
-          <button
-            onClick={logout}
-            style={{
-              padding: '0.5rem 1rem',
-              backgroundColor: '#ef4444',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              fontSize: '0.875rem',
-              cursor: 'pointer',
-            }}
-          >
-            Sair
-          </button>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main style={{ padding: '2rem' }}>
+    <Layout>
+      <div style={{ padding: '2rem' }}>
         {/* Stats Cards */}
         <div style={{
           display: 'grid',
@@ -180,7 +145,7 @@ export default function Dashboard() {
             </div>
           )}
         </div>
-      </main>
-    </div>
+      </div>
+    </Layout>
   );
 }
