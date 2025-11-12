@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
 import Layout from '../components/Layout';
+import ImportModal from '../components/ImportModal';
 
 export default function Categories() {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
   const [formData, setFormData] = useState({
     nome: '',
@@ -77,25 +79,42 @@ export default function Categories() {
           <h1 style={{ fontSize: '2rem', fontWeight: 'bold', color: '#1f2937', margin: 0 }}>
             🏷️ Categorias
           </h1>
-          <button
-            onClick={() => {
-              setEditingCategory(null);
-              setFormData({ nome: '', icone: '📦' });
-              setShowModal(true);
-            }}
-            style={{
-              padding: '0.75rem 1.5rem',
-              backgroundColor: '#2563eb',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '0.875rem',
-              fontWeight: '500',
-            }}
-          >
-            + Nova Categoria
-          </button>
+          <div style={{ display: 'flex', gap: '0.75rem' }}>
+            <button
+              onClick={() => setShowImportModal(true)}
+              style={{
+                padding: '0.75rem 1.5rem',
+                backgroundColor: '#10b981',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '0.875rem',
+                fontWeight: '500',
+              }}
+            >
+              📥 Importar Excel
+            </button>
+            <button
+              onClick={() => {
+                setEditingCategory(null);
+                setFormData({ nome: '', icone: '📦' });
+                setShowModal(true);
+              }}
+              style={{
+                padding: '0.75rem 1.5rem',
+                backgroundColor: '#2563eb',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '0.875rem',
+                fontWeight: '500',
+              }}
+            >
+              + Nova Categoria
+            </button>
+          </div>
         </div>
 
         <div style={{
@@ -279,6 +298,18 @@ export default function Categories() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Import Modal */}
+      {showImportModal && (
+        <ImportModal
+          type="categories"
+          onClose={() => setShowImportModal(false)}
+          onSuccess={() => {
+            setShowImportModal(false);
+            loadCategories();
+          }}
+        />
       )}
     </Layout>
   );
