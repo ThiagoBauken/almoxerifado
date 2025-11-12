@@ -10,12 +10,12 @@ router.post('/full', async (req, res) => {
   try {
     const { lastSync } = req.body;
 
-    // Buscar dados atualizados desde a última sincronização
+    // Buscar dados atualizados desde a última sincronização (filtrado por organização)
     const items = await pool.query(
       lastSync
-        ? 'SELECT * FROM items WHERE updated_at > $1'
-        : 'SELECT * FROM items',
-      lastSync ? [lastSync] : []
+        ? 'SELECT * FROM items WHERE organization_id = $1 AND updated_at > $2'
+        : 'SELECT * FROM items WHERE organization_id = $1',
+      lastSync ? [req.user.organization_id, lastSync] : [req.user.organization_id]
     );
 
     const transfers = await pool.query(
@@ -25,9 +25,36 @@ router.post('/full', async (req, res) => {
       lastSync ? [lastSync] : []
     );
 
-    const users = await pool.query('SELECT id, nome, email, perfil, obra_id, foto FROM users');
-    const categories = await pool.query('SELECT * FROM categories');
-    const obras = await pool.query('SELECT * FROM obras');
+    const users = await pool.query(
+      'SELECT id, nome, email, perfil, obra_id, foto FROM users WHERE organization_id = $1',
+      [req.user.organization_id]
+    );
+
+    const categories = await pool.query(
+      'SELECT * FROM categories WHERE organization_id = $1',
+      [req.user.organization_id]
+    );
+
+    const obras = await pool.query(
+      'SELECT * FROM obras WHERE organization_id = $1',
+      [req.user.organization_id]
+    );
+
+    const storage = await pool.query(
+      'SELECT * FROM locais_armazenamento WHERE organization_id = $1',
+      [req.user.organization_id]
+    );
+
+    const movimentacoes = await pool.query(
+      lastSync
+        ? `SELECT m.* FROM movimentacoes m
+           JOIN items i ON m.item_id = i.id
+           WHERE i.organization_id = $1 AND m.created_at > $2`
+        : `SELECT m.* FROM movimentacoes m
+           JOIN items i ON m.item_id = i.id
+           WHERE i.organization_id = $1`,
+      lastSync ? [req.user.organization_id, lastSync] : [req.user.organization_id]
+    );
 
     res.json({
       success: true,
@@ -37,6 +64,8 @@ router.post('/full', async (req, res) => {
         users: users.rows,
         categories: categories.rows,
         obras: obras.rows,
+        storage: storage.rows,
+        movimentacoes: movimentacoes.rows,
         syncTimestamp: new Date().toISOString(),
       },
     });

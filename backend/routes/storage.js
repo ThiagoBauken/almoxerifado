@@ -11,9 +11,9 @@ router.get('/', async (req, res) => {
   try {
     const { tipo, setor } = req.query;
 
-    let query = 'SELECT * FROM locais_armazenamento WHERE 1=1';
-    const params = [];
-    let paramIndex = 1;
+    let query = 'SELECT * FROM locais_armazenamento WHERE organization_id = $1';
+    const params = [req.user.organization_id];
+    let paramIndex = 2;
 
     if (tipo) {
       query += ` AND tipo = $${paramIndex}`;
@@ -61,8 +61,8 @@ router.get('/:id', async (req, res) => {
     const { id } = req.params;
 
     const result = await pool.query(
-      'SELECT * FROM locais_armazenamento WHERE id = $1',
-      [id]
+      'SELECT * FROM locais_armazenamento WHERE id = $1 AND organization_id = $2',
+      [id, req.user.organization_id]
     );
 
     if (result.rows.length === 0) {
@@ -114,10 +114,10 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Verificar se código já existe
+    // Verificar se código já existe na mesma organização
     const exists = await pool.query(
-      'SELECT id FROM locais_armazenamento WHERE codigo = $1',
-      [codigo]
+      'SELECT id FROM locais_armazenamento WHERE codigo = $1 AND organization_id = $2',
+      [codigo, req.user.organization_id]
     );
 
     if (exists.rows.length > 0) {
@@ -128,10 +128,10 @@ router.post('/', async (req, res) => {
     }
 
     const result = await pool.query(
-      `INSERT INTO locais_armazenamento (codigo, descricao, tipo, capacidade, setor, observacoes)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO locais_armazenamento (codigo, descricao, tipo, capacidade, setor, observacoes, organization_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [codigo, descricao, tipo, capacidade, setor, observacoes]
+      [codigo, descricao, tipo, capacidade, setor, observacoes, req.user.organization_id]
     );
 
     res.status(201).json({
@@ -163,9 +163,9 @@ router.put('/:id', async (req, res) => {
            setor = COALESCE($4, setor),
            observacoes = COALESCE($5, observacoes),
            updated_at = NOW()
-       WHERE id = $6
+       WHERE id = $6 AND organization_id = $7
        RETURNING *`,
-      [descricao, tipo, capacidade, setor, observacoes, id]
+      [descricao, tipo, capacidade, setor, observacoes, id, req.user.organization_id]
     );
 
     if (result.rows.length === 0) {
@@ -209,8 +209,8 @@ router.delete('/:id', async (req, res) => {
     }
 
     const result = await pool.query(
-      'DELETE FROM locais_armazenamento WHERE id = $1 RETURNING *',
-      [id]
+      'DELETE FROM locais_armazenamento WHERE id = $1 AND organization_id = $2 RETURNING *',
+      [id, req.user.organization_id]
     );
 
     if (result.rows.length === 0) {
@@ -244,23 +244,26 @@ router.get('/stats/overview', async (req, res) => {
         COUNT(DISTINCT tipo) as tipos_diferentes,
         COUNT(DISTINCT setor) as setores_diferentes
       FROM locais_armazenamento
-    `);
+      WHERE organization_id = $1
+    `, [req.user.organization_id]);
 
     const ocupacao = await pool.query(`
       SELECT
         COUNT(DISTINCT i.local_armazenamento_id) as locais_ocupados
       FROM items i
       WHERE i.local_armazenamento_id IS NOT NULL
-    `);
+        AND i.organization_id = $1
+    `, [req.user.organization_id]);
 
     const porTipo = await pool.query(`
       SELECT
         tipo,
         COUNT(*) as quantidade
       FROM locais_armazenamento
+      WHERE organization_id = $1
       GROUP BY tipo
       ORDER BY quantidade DESC
-    `);
+    `, [req.user.organization_id]);
 
     res.json({
       success: true,

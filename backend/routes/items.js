@@ -29,10 +29,10 @@ router.get('/', async (req, res) => {
       FROM items i
       LEFT JOIN categories c ON i.categoria_id = c.id
       LEFT JOIN locais_armazenamento l ON i.local_armazenamento_id = l.id
-      WHERE 1=1
+      WHERE i.organization_id = $1
     `;
-    const params = [];
-    let paramIndex = 1;
+    const params = [req.user.organization_id];
+    let paramIndex = 2;
 
     // Filtros
     if (estado) {
@@ -78,7 +78,10 @@ router.get('/', async (req, res) => {
     const result = await pool.query(query, params);
 
     // Contar total
-    const countResult = await pool.query('SELECT COUNT(*) FROM items');
+    const countResult = await pool.query(
+      'SELECT COUNT(*) FROM items WHERE organization_id = $1',
+      [req.user.organization_id]
+    );
     const total = parseInt(countResult.rows[0].count);
 
     res.json({
@@ -116,8 +119,8 @@ router.get('/:id', async (req, res) => {
        LEFT JOIN users u ON i.funcionario_id = u.id
        LEFT JOIN obras o ON i.obra_id = o.id
        LEFT JOIN locais_armazenamento l ON i.local_armazenamento_id = l.id
-       WHERE i.id = $1`,
-      [id]
+       WHERE i.id = $1 AND i.organization_id = $2`,
+      [id, req.user.organization_id]
     );
 
     if (result.rows.length === 0) {
@@ -210,9 +213,9 @@ router.post(
           localizacao_id, funcionario_id, obra_id, foto, qr_code,
           descricao, valor_unitario, data_aquisicao, local_armazenamento_id,
           marca_modelo, metragem, unidade, estoque_minimo, quantidade_disponivel,
-          data_saida, data_retorno, observacao
+          data_saida, data_retorno, observacao, organization_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
         RETURNING *`,
         [
           codigoFinal,
@@ -239,6 +242,7 @@ router.post(
           data_saida,
           data_retorno,
           observacao,
+          req.user.organization_id,
         ]
       );
 
@@ -274,9 +278,9 @@ router.put('/:id', async (req, res) => {
     const result = await pool.query(
       `UPDATE items
        SET ${setClause}, updated_at = NOW()
-       WHERE id = $1
+       WHERE id = $1 AND organization_id = $${values.length + 2}
        RETURNING *`,
-      [id, ...values]
+      [id, ...values, req.user.organization_id]
     );
 
     if (result.rows.length === 0) {
@@ -306,7 +310,10 @@ router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
-    const result = await pool.query('DELETE FROM items WHERE id = $1 RETURNING *', [id]);
+    const result = await pool.query(
+      'DELETE FROM items WHERE id = $1 AND organization_id = $2 RETURNING *',
+      [id, req.user.organization_id]
+    );
 
     if (result.rows.length === 0) {
       return res.status(404).json({
@@ -340,7 +347,8 @@ router.get('/stats/overview', async (req, res) => {
         COUNT(*) FILTER (WHERE estado = 'em_manutencao') as itens_em_manutencao,
         COUNT(*) FILTER (WHERE estado = 'pendente_aceitacao') as itens_pendentes
       FROM items
-    `);
+      WHERE organization_id = $1
+    `, [req.user.organization_id]);
 
     res.json({
       success: true,
