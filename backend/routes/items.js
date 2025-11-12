@@ -230,6 +230,9 @@ router.post(
         }
       }
 
+      // Helper: convert empty strings to null for UUID and numeric fields
+      const toNullIfEmpty = (value) => (value === '' || value === undefined) ? null : value;
+
       const result = await pool.query(
         `INSERT INTO items (
           lacre, codigo, nome, quantidade, categoria_id, estado, localizacao_tipo,
@@ -245,25 +248,25 @@ router.post(
           codigoFinal,
           nome,
           quantidade || 0,
-          categoria_id,
+          toNullIfEmpty(categoria_id),
           estado || 'disponivel',
           localizacao_tipo,
-          localizacao_id,
-          funcionario_id,
-          obra_id,
+          toNullIfEmpty(localizacao_id),
+          toNullIfEmpty(funcionario_id),
+          toNullIfEmpty(obra_id), // Fix: convert empty string to null
           foto,
           qr_code,
           descricao,
-          valor_unitario,
-          data_aquisicao,
-          local_armazenamento_id,
+          toNullIfEmpty(valor_unitario),
+          toNullIfEmpty(data_aquisicao),
+          toNullIfEmpty(local_armazenamento_id),
           marca_modelo,
-          metragem,
+          toNullIfEmpty(metragem),
           unidade || 'UN',
           estoque_minimo || 0,
           quantidade_disponivel || quantidade || 0,
-          data_saida,
-          data_retorno,
+          toNullIfEmpty(data_saida),
+          toNullIfEmpty(data_retorno),
           observacao,
           req.user.organization_id,
         ]

@@ -127,11 +127,14 @@ router.post('/', async (req, res) => {
       });
     }
 
+    // Helper: convert empty strings to null for numeric fields
+    const toNullIfEmpty = (value) => (value === '' || value === undefined) ? null : value;
+
     const result = await pool.query(
       `INSERT INTO locais_armazenamento (codigo, descricao, tipo, capacidade, setor, observacoes, organization_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [codigo, descricao, tipo, capacidade, setor, observacoes, req.user.organization_id]
+      [codigo, descricao, tipo || 'deposito', toNullIfEmpty(capacidade), setor, observacoes, req.user.organization_id]
     );
 
     res.status(201).json({

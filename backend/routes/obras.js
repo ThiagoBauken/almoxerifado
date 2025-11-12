@@ -62,7 +62,7 @@ router.get('/:id', async (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
-    const { nome, endereco, status, responsavel_id, data_inicio, data_conclusao, observacoes } = req.body;
+    const { nome, endereco, status, responsavel_id, data_inicio, data_conclusao, data_fim } = req.body;
 
     if (!nome) {
       return res.status(400).json({
@@ -71,11 +71,17 @@ router.post('/', async (req, res) => {
       });
     }
 
+    // Helper: convert empty strings to null for UUID and date fields
+    const toNullIfEmpty = (value) => (value === '' || value === undefined) ? null : value;
+
+    // Use data_fim from schema (data_conclusao is alias from frontend)
+    const dataFimFinal = data_fim || data_conclusao;
+
     const result = await pool.query(
-      `INSERT INTO obras (nome, endereco, status, responsavel_id, data_inicio, data_conclusao, observacoes, organization_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO obras (nome, endereco, status, responsavel_id, data_inicio, data_fim, organization_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [nome, endereco, status || 'ativa', responsavel_id, data_inicio, data_conclusao, observacoes, req.user.organization_id]
+      [nome, endereco, status || 'ativa', toNullIfEmpty(responsavel_id), toNullIfEmpty(data_inicio), toNullIfEmpty(dataFimFinal), req.user.organization_id]
     );
 
     res.status(201).json({
@@ -97,7 +103,10 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { nome, endereco, status, responsavel_id, data_inicio, data_conclusao, observacoes } = req.body;
+    const { nome, endereco, status, responsavel_id, data_inicio, data_conclusao, data_fim } = req.body;
+
+    // Use data_fim from schema (data_conclusao is alias from frontend)
+    const dataFimFinal = data_fim || data_conclusao;
 
     const result = await pool.query(
       `UPDATE obras
@@ -106,12 +115,11 @@ router.put('/:id', async (req, res) => {
            status = COALESCE($3, status),
            responsavel_id = COALESCE($4, responsavel_id),
            data_inicio = COALESCE($5, data_inicio),
-           data_conclusao = COALESCE($6, data_conclusao),
-           observacoes = COALESCE($7, observacoes),
+           data_fim = COALESCE($6, data_fim),
            updated_at = NOW()
-       WHERE id = $8 AND organization_id = $9
+       WHERE id = $7 AND organization_id = $8
        RETURNING *`,
-      [nome, endereco, status, responsavel_id, data_inicio, data_conclusao, observacoes, id, req.user.organization_id]
+      [nome, endereco, status, responsavel_id, data_inicio, dataFimFinal, id, req.user.organization_id]
     );
 
     if (result.rows.length === 0) {
