@@ -57,6 +57,7 @@ router.post(
           id: user.id,
           email: user.email,
           perfil: user.perfil,
+          organization_id: user.organization_id,
         },
         process.env.JWT_SECRET,
         { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
@@ -91,10 +92,14 @@ router.post(
     body('nome').notEmpty().withMessage('Nome é obrigatório'),
     body('email').isEmail().withMessage('Email inválido'),
     body('senha').isLength({ min: 6 }).withMessage('Senha deve ter no mínimo 6 caracteres'),
-    body('perfil').isIn(['funcionario', 'almoxarife', 'gestor', 'admin']).withMessage('Perfil inválido'),
+    body('organizacao_nome').optional(),
   ],
   async (req, res) => {
+    const client = await pool.connect();
+
     try {
+      await client.query('BEGIN');
+
       // Validação
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
@@ -104,10 +109,10 @@ router.post(
         });
       }
 
-      const { nome, email, senha, perfil, obra_id, foto } = req.body;
+      const { nome, email, senha, organizacao_nome } = req.body;
 
       // Verificar se email já existe
-      const emailExists = await pool.query(
+      const emailExists = await client.query(
         'SELECT id FROM users WHERE email = $1',
         [email]
       );
@@ -122,15 +127,35 @@ router.post(
       // Hash da senha
       const senhaHash = await bcrypt.hash(senha, 10);
 
-      // Inserir usuário
-      const result = await pool.query(
-        `INSERT INTO users (nome, email, senha, perfil, obra_id, foto)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         RETURNING id, nome, email, perfil, obra_id, foto, created_at`,
-        [nome, email, senhaHash, perfil, obra_id, foto]
+      let organization_id = null;
+
+      // Criar organização se não existir
+      if (organizacao_nome) {
+        const slug = organizacao_nome.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+
+        const orgResult = await client.query(
+          `INSERT INTO organizations (nome, slug, plano)
+           VALUES ($1, $2, 'free')
+           RETURNING id`,
+          [organizacao_nome, slug]
+        );
+
+        organization_id = orgResult.rows[0].id;
+      }
+
+      // Inserir usuário (sempre como admin se criar organização)
+      const perfil = organization_id ? 'admin' : 'funcionario';
+
+      const result = await client.query(
+        `INSERT INTO users (nome, email, senha, perfil, organization_id)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING id, nome, email, perfil, organization_id, created_at`,
+        [nome, email, senhaHash, perfil, organization_id]
       );
 
       const user = result.rows[0];
+
+      await client.query('COMMIT');
 
       // Gerar token
       const token = jwt.sign(
@@ -138,6 +163,7 @@ router.post(
           id: user.id,
           email: user.email,
           perfil: user.perfil,
+          organization_id: user.organization_id,
         },
         process.env.JWT_SECRET,
         { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
@@ -152,11 +178,14 @@ router.post(
         },
       });
     } catch (error) {
+      await client.query('ROLLBACK');
       console.error('Erro no registro:', error);
       res.status(500).json({
         success: false,
         message: 'Erro ao criar usuário',
       });
+    } finally {
+      client.release();
     }
   }
 );
