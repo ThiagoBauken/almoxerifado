@@ -16,7 +16,8 @@
     "recharts": "^2.10.4",
     "@tanstack/react-table": "^8.11.7",
     "date-fns": "^3.3.1",
-    "react-hot-toast": "^2.4.1"
+    "react-hot-toast": "^2.4.1",
+    "qrcode": "^1.5.3"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",

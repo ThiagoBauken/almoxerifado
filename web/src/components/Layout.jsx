@@ -15,6 +15,7 @@ export default function Layout({ children }) {
     { path: '/storage', label: 'Locais', icon: '📍' },
     { path: '/obras', label: 'Obras', icon: '🏗️' },
     { path: '/transfers', label: 'Transferências', icon: '🔄' },
+    { path: '/history', label: 'Histórico', icon: '📋' },
     { path: '/users', label: 'Usuários', icon: '👥', adminOnly: true },
     { path: '/settings', label: 'Configurações', icon: '⚙️' },
   ];
