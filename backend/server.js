@@ -54,6 +54,7 @@ app.use('/api/sync', require('./routes/sync'));
 app.use('/api/storage', require('./routes/storage'));
 app.use('/api/organizations', require('./routes/organizations'));
 app.use('/api/invites', require('./routes/invites'));
+app.use('/api/movimentacoes', require('./routes/movimentacoes'));
 
 // Servir arquivos estáticos do frontend (React build)
 const path = require('path');
