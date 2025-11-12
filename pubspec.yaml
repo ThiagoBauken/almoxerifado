@@ -1,0 +1,72 @@
+name: stockmaster
+description: Sistema de Gerenciamento de Almoxarifado Offline
+
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # UI
+  cupertino_icons: ^1.0.2
+  google_fonts: ^6.1.0
+  flutter_svg: ^2.0.9
+  cached_network_image: ^3.3.0
+  shimmer: ^3.0.0
+  flutter_slidable: ^3.0.1
+  
+  # Estado e Armazenamento
+  provider: ^6.1.1
+  shared_preferences: ^2.2.2
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  sqflite: ^2.3.0
+  path_provider: ^2.1.1
+  
+  # Networking
+  dio: ^5.4.0
+  connectivity_plus: ^5.0.2
+  
+  # QR Code
+  qr_code_scanner: ^1.0.1
+  qr_flutter: ^4.1.0
+  
+  # Permissions
+  permission_handler: ^11.1.0
+  
+  # Utilitários
+  intl: ^0.18.1
+  uuid: ^4.2.2
+  fl_chart: ^0.65.0
+  image_picker: ^1.0.5
+  file_picker: ^6.1.1
+  
+  # Autenticação e Segurança
+  flutter_secure_storage: ^9.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+  hive_generator: ^2.0.1
+  build_runner: ^2.4.6
+
+flutter:
+  uses-material-design: true
+  
+  assets:
+    - assets/images/
+    - assets/icons/
+    
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700

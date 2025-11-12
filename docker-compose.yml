@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:14-alpine
+    container_name: almoxarifado-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: almoxarifado
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API (Node.js + Express)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: almoxarifado-backend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: almoxarifado
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      JWT_SECRET: change_this_in_production_super_secret_key_2024
+      JWT_EXPIRES_IN: 7d
+      CORS_ORIGIN: http://localhost:5173,http://localhost:19006
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    command: sh -c "npm run migrate && npm start"
+
+  # Web Dashboard (React + Vite)
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: almoxarifado-web
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    environment:
+      VITE_API_URL: http://localhost:3000/api
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  default:
+    name: almoxarifado-network
