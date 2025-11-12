@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
 import Layout from '../components/Layout';
+import ImportModal from '../components/ImportModal';
 
 export default function Storage() {
   const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [editingLocation, setEditingLocation] = useState(null);
   const [formData, setFormData] = useState({
     codigo: '',
@@ -90,32 +92,49 @@ export default function Storage() {
           <h1 style={{ fontSize: '2rem', fontWeight: 'bold', color: '#1f2937', margin: 0 }}>
             📍 Locais de Armazenamento
           </h1>
-          <button
-            onClick={() => {
-              setEditingLocation(null);
-              setFormData({
-                codigo: '',
-                descricao: '',
-                tipo: 'deposito',
-                capacidade: '',
-                setor: '',
-                observacoes: '',
-              });
-              setShowModal(true);
-            }}
-            style={{
-              padding: '0.75rem 1.5rem',
-              backgroundColor: '#2563eb',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '0.875rem',
-              fontWeight: '500',
-            }}
-          >
-            + Novo Local
-          </button>
+          <div style={{ display: 'flex', gap: '0.75rem' }}>
+            <button
+              onClick={() => setShowImportModal(true)}
+              style={{
+                padding: '0.75rem 1.5rem',
+                backgroundColor: '#10b981',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '0.875rem',
+                fontWeight: '500',
+              }}
+            >
+              📥 Importar Excel
+            </button>
+            <button
+              onClick={() => {
+                setEditingLocation(null);
+                setFormData({
+                  codigo: '',
+                  descricao: '',
+                  tipo: 'deposito',
+                  capacidade: '',
+                  setor: '',
+                  observacoes: '',
+                });
+                setShowModal(true);
+              }}
+              style={{
+                padding: '0.75rem 1.5rem',
+                backgroundColor: '#2563eb',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '0.875rem',
+                fontWeight: '500',
+              }}
+            >
+              + Novo Local
+            </button>
+          </div>
         </div>
 
         <div style={{
@@ -418,6 +437,18 @@ export default function Storage() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Import Modal */}
+      {showImportModal && (
+        <ImportModal
+          type="storage"
+          onClose={() => setShowImportModal(false)}
+          onSuccess={() => {
+            setShowImportModal(false);
+            loadLocations();
+          }}
+        />
       )}
     </Layout>
   );

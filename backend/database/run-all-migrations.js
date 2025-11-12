@@ -32,6 +32,11 @@ async function runAllMigrations() {
     const migration017 = require('./migrations/017-add-campos-essenciais-items');
     await migration017.up();
 
+    // Migration 018: Fix users organization
+    console.log('📦 Migration 018: Corrigindo usuários sem organização...');
+    const migration018 = require('./migrations/018-fix-users-organization');
+    await migration018.up();
+
     // Criar tabela locais_armazenamento se não existir
     console.log('📦 Criando tabela locais_armazenamento...');
     await pool.query(`

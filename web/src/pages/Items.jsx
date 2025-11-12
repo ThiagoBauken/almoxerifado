@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../services/api';
 import Layout from '../components/Layout';
+import ImportModal from '../components/ImportModal';
 import QRCode from 'qrcode';
 
 export default function Items() {
@@ -9,6 +10,7 @@ export default function Items() {
   const [storageLocations, setStorageLocations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [selectedItemForQR, setSelectedItemForQR] = useState(null);
@@ -212,41 +214,58 @@ export default function Items() {
           <h1 style={{ fontSize: '2rem', fontWeight: 'bold', color: '#1f2937', margin: 0 }}>
             📦 Gerenciamento de Itens
           </h1>
-          <button
-            onClick={() => {
-              setEditingItem(null);
-              setFormData({
-                nome: '',
-                codigo: '',
-                quantidade: 0,
-                categoria_id: '',
-                local_armazenamento_id: '',
-                estado: 'disponivel',
-                marca_modelo: '',
-                metragem: '',
-                unidade: 'UN',
-                estoque_minimo: 0,
-                valor_unitario: '',
-                data_saida: '',
-                data_retorno: '',
-                data_aquisicao: '',
-                observacao: '',
-              });
-              setShowModal(true);
-            }}
-            style={{
-              padding: '0.75rem 1.5rem',
-              backgroundColor: '#2563eb',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '0.875rem',
-              fontWeight: '500',
-            }}
-          >
-            + Novo Item
-          </button>
+          <div style={{ display: 'flex', gap: '0.75rem' }}>
+            <button
+              onClick={() => setShowImportModal(true)}
+              style={{
+                padding: '0.75rem 1.5rem',
+                backgroundColor: '#10b981',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '0.875rem',
+                fontWeight: '500',
+              }}
+            >
+              📥 Importar Excel
+            </button>
+            <button
+              onClick={() => {
+                setEditingItem(null);
+                setFormData({
+                  nome: '',
+                  codigo: '',
+                  quantidade: 0,
+                  categoria_id: '',
+                  local_armazenamento_id: '',
+                  estado: 'disponivel',
+                  marca_modelo: '',
+                  metragem: '',
+                  unidade: 'UN',
+                  estoque_minimo: 0,
+                  valor_unitario: '',
+                  data_saida: '',
+                  data_retorno: '',
+                  data_aquisicao: '',
+                  observacao: '',
+                });
+                setShowModal(true);
+              }}
+              style={{
+                padding: '0.75rem 1.5rem',
+                backgroundColor: '#2563eb',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '0.875rem',
+                fontWeight: '500',
+              }}
+            >
+              + Novo Item
+            </button>
+          </div>
         </div>
 
         {/* Search Bar */}
@@ -1011,6 +1030,18 @@ export default function Items() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Import Modal */}
+      {showImportModal && (
+        <ImportModal
+          type="items"
+          onClose={() => setShowImportModal(false)}
+          onSuccess={() => {
+            setShowImportModal(false);
+            loadData();
+          }}
+        />
       )}
     </Layout>
   );
