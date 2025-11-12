@@ -1,12 +1,29 @@
+# Dependencies - CRITICAL: Exclude all node_modules to force rebuild in container
 node_modules
+backend/node_modules
+web/node_modules
+**/node_modules
+
+# Logs
 npm-debug.log
-.env
-.DS_Store
 *.log
+
+# Environment
+.env
+.env.local
+
+# OS files
+.DS_Store
+
+# Git
 .git
 .gitignore
+
+# Documentation
 README.md
 *.md
+
+# Unused folders
 mobile/
 .claude/
 mnt/

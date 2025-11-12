@@ -24,11 +24,11 @@ WORKDIR /app
 # Copiar package files do backend
 COPY backend/package*.json ./
 
-# Instalar dependências do backend
-RUN npm install --production
-
-# Copiar código do backend
+# Copiar código do backend (exceto node_modules)
 COPY backend/ ./
+
+# Instalar dependências do backend (força rebuild de nativos)
+RUN npm ci --production && npm rebuild bcrypt --build-from-source
 
 # Copiar build do frontend para pasta public
 COPY --from=frontend-builder /frontend/dist ./public
