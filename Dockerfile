@@ -1,4 +1,22 @@
-# Dockerfile para Backend API
+# Dockerfile para Backend + Frontend
+# Stage 1: Build do Frontend
+FROM node:18-alpine AS frontend-builder
+
+WORKDIR /frontend
+
+# Copiar package files do frontend
+COPY web/package*.json ./
+
+# Instalar dependências
+RUN npm install
+
+# Copiar código do frontend
+COPY web/ ./
+
+# Build do frontend
+RUN npm run build
+
+# Stage 2: Backend + Frontend estático
 FROM node:18-alpine
 
 WORKDIR /app
@@ -6,11 +24,14 @@ WORKDIR /app
 # Copiar package files do backend
 COPY backend/package*.json ./
 
-# Instalar dependências
+# Instalar dependências do backend
 RUN npm install --production
 
 # Copiar código do backend
 COPY backend/ ./
+
+# Copiar build do frontend para pasta public
+COPY --from=frontend-builder /frontend/dist ./public
 
 # Expor porta
 EXPOSE 3000

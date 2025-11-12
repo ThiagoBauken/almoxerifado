@@ -53,7 +53,21 @@ app.use('/api/transfers', require('./routes/transfers'));
 app.use('/api/sync', require('./routes/sync'));
 app.use('/api/storage', require('./routes/storage'));
 
-// 404 Handler
+// Servir arquivos estáticos do frontend (React build)
+const path = require('path');
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Todas as rotas não-API servem o index.html (SPA routing)
+app.get('*', (req, res, next) => {
+  // Se for uma rota de API que não existe, vai para o 404 handler
+  if (req.path.startsWith('/api/')) {
+    return next();
+  }
+  // Caso contrário, serve o index.html do React
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// 404 Handler (só para rotas /api/*)
 app.use((req, res) => {
   res.status(404).json({
     success: false,
