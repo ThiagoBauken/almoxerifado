@@ -145,21 +145,7 @@ router.get('/:id', async (req, res) => {
 router.post(
   '/',
   [
-    body('lacre').notEmpty().withMessage('Lacre é obrigatório'),
     body('nome').notEmpty().withMessage('Nome é obrigatório'),
-    body('estado')
-      .isIn([
-        'disponivel_estoque',
-        'pendente_aceitacao',
-        'com_funcionario',
-        'em_obra',
-        'em_manutencao',
-        'inativo',
-        'extraviado',
-        'danificado',
-        'em_transito',
-      ])
-      .withMessage('Estado inválido'),
   ],
   async (req, res) => {
     try {
@@ -174,7 +160,9 @@ router.post(
 
       const {
         lacre,
+        codigo,
         nome,
+        quantidade,
         categoria_id,
         estado,
         localizacao_tipo,
@@ -187,34 +175,52 @@ router.post(
         valor_unitario,
         data_aquisicao,
         local_armazenamento_id,
+        // Novos campos da migration 017
+        marca_modelo,
+        metragem,
+        unidade,
+        estoque_minimo,
+        quantidade_disponivel,
+        data_saida,
+        data_retorno,
+        observacao,
       } = req.body;
 
-      // Verificar se lacre já existe
-      const lacreExists = await pool.query(
-        'SELECT id FROM items WHERE lacre = $1',
-        [lacre]
-      );
+      // Usar codigo se lacre não fornecido (compatibilidade)
+      const codigoFinal = lacre || codigo;
 
-      if (lacreExists.rows.length > 0) {
-        return res.status(400).json({
-          success: false,
-          message: 'Lacre já cadastrado',
-        });
+      // Verificar se codigo já existe (se fornecido)
+      if (codigoFinal) {
+        const codigoExists = await pool.query(
+          'SELECT id FROM items WHERE codigo = $1 OR lacre = $1',
+          [codigoFinal]
+        );
+
+        if (codigoExists.rows.length > 0) {
+          return res.status(400).json({
+            success: false,
+            message: 'Código já cadastrado',
+          });
+        }
       }
 
       const result = await pool.query(
         `INSERT INTO items (
-          lacre, nome, categoria_id, estado, localizacao_tipo,
+          lacre, codigo, nome, quantidade, categoria_id, estado, localizacao_tipo,
           localizacao_id, funcionario_id, obra_id, foto, qr_code,
-          descricao, valor_unitario, data_aquisicao, local_armazenamento_id
+          descricao, valor_unitario, data_aquisicao, local_armazenamento_id,
+          marca_modelo, metragem, unidade, estoque_minimo, quantidade_disponivel,
+          data_saida, data_retorno, observacao
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
         RETURNING *`,
         [
-          lacre,
+          codigoFinal,
+          codigoFinal,
           nome,
+          quantidade || 0,
           categoria_id,
-          estado,
+          estado || 'disponivel',
           localizacao_tipo,
           localizacao_id,
           funcionario_id,
@@ -225,6 +231,14 @@ router.post(
           valor_unitario,
           data_aquisicao,
           local_armazenamento_id,
+          marca_modelo,
+          metragem,
+          unidade || 'UN',
+          estoque_minimo || 0,
+          quantidade_disponivel || quantidade || 0,
+          data_saida,
+          data_retorno,
+          observacao,
         ]
       );
 
