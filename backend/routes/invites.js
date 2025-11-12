@@ -12,8 +12,8 @@ router.post(
   '/',
   authMiddleware,
   [
-    body('email').isEmail().withMessage('Email inválido'),
     body('perfil').isIn(['funcionario', 'almoxarife', 'gestor', 'admin']).withMessage('Perfil inválido'),
+    body('max_uses').optional().isInt({ min: 1, max: 1000 }).withMessage('Número de usos deve ser entre 1 e 1000'),
   ],
   async (req, res) => {
     try {
@@ -22,7 +22,7 @@ router.post(
         return res.status(400).json({ success: false, errors: errors.array() });
       }
 
-      const { email, perfil } = req.body;
+      const { perfil, max_uses = 1 } = req.body;
 
       // Buscar organização do usuário
       const userResult = await pool.query(
@@ -47,44 +47,18 @@ router.post(
         });
       }
 
-      // Verificar se email já está cadastrado
-      const existingUser = await pool.query(
-        'SELECT id FROM users WHERE email = $1',
-        [email]
-      );
+      // Gerar token único (16 bytes = 32 caracteres hex)
+      const token = crypto.randomBytes(16).toString('hex');
 
-      if (existingUser.rows.length > 0) {
-        return res.status(400).json({
-          success: false,
-          message: 'Email já cadastrado no sistema',
-        });
-      }
-
-      // Verificar se já existe convite pendente
-      const existingInvite = await pool.query(
-        'SELECT id FROM invites WHERE organization_id = $1 AND email = $2 AND accepted_at IS NULL',
-        [organization_id, email]
-      );
-
-      if (existingInvite.rows.length > 0) {
-        return res.status(400).json({
-          success: false,
-          message: 'Já existe um convite pendente para este email',
-        });
-      }
-
-      // Gerar token único
-      const token = crypto.randomBytes(32).toString('hex');
-
-      // Criar convite (expira em 7 dias)
+      // Criar convite (expira em 30 dias para convites multi-uso)
       const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7);
+      expiresAt.setDate(expiresAt.getDate() + 30);
 
       const result = await pool.query(
-        `INSERT INTO invites (organization_id, email, perfil, token, invited_by, expires_at)
-         VALUES ($1, $2, $3, $4, $5, $6)
+        `INSERT INTO invites (organization_id, perfil, token, invited_by, expires_at, max_uses, current_uses)
+         VALUES ($1, $2, $3, $4, $5, $6, 0)
          RETURNING *`,
-        [organization_id, email, perfil, token, req.user.id, expiresAt]
+        [organization_id, perfil, token, req.user.id, expiresAt, max_uses]
       );
 
       const invite = result.rows[0];
@@ -155,20 +129,27 @@ router.get('/verify/:token', async (req, res) => {
       `SELECT i.*, o.nome as organization_name
        FROM invites i
        JOIN organizations o ON i.organization_id = o.id
-       WHERE i.token = $1 AND i.accepted_at IS NULL AND i.expires_at > NOW()`,
+       WHERE i.token = $1 AND i.expires_at > NOW() AND i.current_uses < i.max_uses`,
       [token]
     );
 
     if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: 'Convite inválido ou expirado',
+        message: 'Convite inválido, expirado ou já atingiu o limite de usos',
       });
     }
 
+    const invite = result.rows[0];
+
     res.json({
       success: true,
-      data: result.rows[0],
+      data: {
+        perfil: invite.perfil,
+        organization_name: invite.organization_name,
+        uses_left: invite.max_uses - invite.current_uses,
+        expires_at: invite.expires_at,
+      },
     });
   } catch (error) {
     console.error('Erro ao verificar convite:', error);
@@ -188,30 +169,52 @@ router.post('/accept/:token', async (req, res) => {
     await client.query('BEGIN');
 
     const { token } = req.params;
-    const { nome, senha } = req.body;
+    const { nome, email, senha } = req.body;
 
-    if (!nome || !senha) {
+    if (!nome || !email || !senha) {
       return res.status(400).json({
         success: false,
-        message: 'Nome e senha são obrigatórios',
+        message: 'Nome, email e senha são obrigatórios',
+      });
+    }
+
+    // Validar formato de email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email inválido',
       });
     }
 
     // Buscar convite
     const inviteResult = await client.query(
       `SELECT * FROM invites
-       WHERE token = $1 AND accepted_at IS NULL AND expires_at > NOW()`,
+       WHERE token = $1 AND expires_at > NOW() AND current_uses < max_uses`,
       [token]
     );
 
     if (inviteResult.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: 'Convite inválido ou expirado',
+        message: 'Convite inválido, expirado ou já atingiu o limite de usos',
       });
     }
 
     const invite = inviteResult.rows[0];
+
+    // Verificar se email já está cadastrado
+    const existingUser = await client.query(
+      'SELECT id FROM users WHERE email = $1',
+      [email]
+    );
+
+    if (existingUser.rows.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email já cadastrado no sistema',
+      });
+    }
 
     // Criar usuário
     const bcrypt = require('bcrypt');
@@ -221,12 +224,12 @@ router.post('/accept/:token', async (req, res) => {
       `INSERT INTO users (nome, email, senha, perfil, organization_id)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING id, nome, email, perfil, organization_id`,
-      [nome, invite.email, senhaHash, invite.perfil, invite.organization_id]
+      [nome, email, senhaHash, invite.perfil, invite.organization_id]
     );
 
-    // Marcar convite como aceito
+    // Incrementar contador de usos do convite
     await client.query(
-      'UPDATE invites SET accepted_at = NOW() WHERE id = $1',
+      'UPDATE invites SET current_uses = current_uses + 1 WHERE id = $1',
       [invite.id]
     );
 

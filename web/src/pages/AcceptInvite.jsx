@@ -10,6 +10,7 @@ export default function AcceptInvite() {
   const [error, setError] = useState('');
   const [formData, setFormData] = useState({
     nome: '',
+    email: '',
     senha: '',
   });
 
@@ -44,12 +45,11 @@ export default function AcceptInvite() {
       window.location.reload();
     } catch (error) {
       setError(error.response?.data?.message || 'Erro ao aceitar convite');
-    } finally {
       setLoading(false);
     }
   };
 
-  if (loading) {
+  if (loading && !invite) {
     return (
       <div style={{
         minHeight: '100vh',
@@ -129,19 +129,37 @@ export default function AcceptInvite() {
         maxWidth: '400px',
       }}>
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📧</div>
+          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🎉</div>
           <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#1f2937', marginBottom: '0.5rem' }}>
-            Convite para {invite.organization_name}
+            Bem-vindo ao {invite.organization_name}
           </h1>
-          <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+          <p style={{ color: '#6b7280', fontSize: '0.875rem', marginBottom: '0.25rem' }}>
             Você foi convidado como <strong>{invite.perfil}</strong>
           </p>
+          {invite.uses_left && (
+            <p style={{ color: '#10b981', fontSize: '0.75rem' }}>
+              {invite.uses_left} vagas restantes neste convite
+            </p>
+          )}
         </div>
+
+        {error && (
+          <div style={{
+            padding: '0.75rem',
+            backgroundColor: '#fee2e2',
+            color: '#991b1b',
+            borderRadius: '6px',
+            fontSize: '0.875rem',
+            marginBottom: '1rem',
+          }}>
+            {error}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit}>
           <div style={{ marginBottom: '1rem' }}>
             <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
-              Seu Nome Completo
+              Seu Nome Completo *
             </label>
             <input
               type="text"
@@ -155,32 +173,33 @@ export default function AcceptInvite() {
                 borderRadius: '6px',
                 fontSize: '0.875rem',
               }}
+              placeholder="Ex: João Silva"
             />
           </div>
 
           <div style={{ marginBottom: '1rem' }}>
             <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
-              Email
+              Seu Email *
             </label>
             <input
               type="email"
-              disabled
-              value={invite.email}
+              required
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               style={{
                 width: '100%',
                 padding: '0.5rem',
                 border: '1px solid #d1d5db',
                 borderRadius: '6px',
                 fontSize: '0.875rem',
-                backgroundColor: '#f3f4f6',
-                color: '#6b7280',
               }}
+              placeholder="seu@email.com"
             />
           </div>
 
           <div style={{ marginBottom: '1.5rem' }}>
             <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
-              Criar Senha
+              Criar Senha *
             </label>
             <input
               type="password"
@@ -195,7 +214,11 @@ export default function AcceptInvite() {
                 borderRadius: '6px',
                 fontSize: '0.875rem',
               }}
+              placeholder="Mínimo 6 caracteres"
             />
+            <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem' }}>
+              Mínimo de 6 caracteres
+            </div>
           </div>
 
           <button
@@ -213,9 +236,16 @@ export default function AcceptInvite() {
               cursor: loading ? 'not-allowed' : 'pointer',
             }}
           >
-            {loading ? 'Processando...' : 'Aceitar Convite'}
+            {loading ? 'Criando sua conta...' : 'Criar Minha Conta'}
           </button>
         </form>
+
+        <div style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: '0.75rem', color: '#6b7280' }}>
+          Já tem uma conta?{' '}
+          <a href="/login" style={{ color: '#2563eb', textDecoration: 'none', fontWeight: '500' }}>
+            Fazer Login
+          </a>
+        </div>
       </div>
     </div>
   );

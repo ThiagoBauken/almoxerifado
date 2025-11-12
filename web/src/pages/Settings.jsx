@@ -10,8 +10,8 @@ export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteForm, setInviteForm] = useState({
-    email: '',
     perfil: 'funcionario',
+    max_uses: 1,
   });
   const [orgUsers, setOrgUsers] = useState([]);
 
@@ -45,13 +45,13 @@ export default function Settings() {
     try {
       const res = await api.post('/invites', inviteForm);
 
-      alert(`Convite enviado! Link: ${res.data.inviteLink}`);
+      alert(`Convite criado! Link: ${res.data.inviteLink}`);
 
       setShowInviteModal(false);
-      setInviteForm({ email: '', perfil: 'funcionario' });
+      setInviteForm({ perfil: 'funcionario', max_uses: 1 });
       loadData();
     } catch (error) {
-      alert(error.response?.data?.message || 'Erro ao enviar convite');
+      alert(error.response?.data?.message || 'Erro ao criar convite');
     }
   };
 
@@ -70,6 +70,12 @@ export default function Settings() {
     const link = `${window.location.origin}/invite/${token}`;
     navigator.clipboard.writeText(link);
     alert('Link copiado!');
+  };
+
+  const isInviteActive = (invite) => {
+    const now = new Date();
+    const expiresAt = new Date(invite.expires_at);
+    return expiresAt > now && invite.current_uses < invite.max_uses;
   };
 
   if (loading) {
@@ -153,7 +159,7 @@ export default function Settings() {
                   fontSize: '0.875rem',
                 }}
               >
-                + Convidar Usuário
+                + Gerar Link de Convite
               </button>
             )}
           </div>
@@ -216,7 +222,7 @@ export default function Settings() {
           )}
         </div>
 
-        {/* Convites Pendentes */}
+        {/* Convites */}
         {['admin', 'gestor'].includes(user?.perfil) && (
           <div style={{
             backgroundColor: 'white',
@@ -225,23 +231,26 @@ export default function Settings() {
             padding: '2rem',
           }}>
             <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '1.5rem', color: '#1f2937' }}>
-              Convites Pendentes
+              Links de Convite
             </h2>
 
-            {invites.filter(i => !i.accepted_at).length === 0 ? (
-              <p style={{ color: '#6b7280' }}>Nenhum convite pendente</p>
+            {invites.length === 0 ? (
+              <p style={{ color: '#6b7280' }}>Nenhum convite criado</p>
             ) : (
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead style={{ backgroundColor: '#f9fafb' }}>
                   <tr>
                     <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: '#6b7280' }}>
-                      Email
-                    </th>
-                    <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: '#6b7280' }}>
                       Perfil
                     </th>
                     <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: '#6b7280' }}>
+                      Usos
+                    </th>
+                    <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: '#6b7280' }}>
                       Expira em
+                    </th>
+                    <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: '#6b7280' }}>
+                      Status
                     </th>
                     <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: '#6b7280' }}>
                       Ações
@@ -249,51 +258,75 @@ export default function Settings() {
                   </tr>
                 </thead>
                 <tbody>
-                  {invites.filter(i => !i.accepted_at).map(invite => (
-                    <tr key={invite.id} style={{ borderTop: '1px solid #e5e7eb' }}>
-                      <td style={{ padding: '0.75rem', fontSize: '0.875rem', color: '#1f2937' }}>
-                        {invite.email}
-                      </td>
-                      <td style={{ padding: '0.75rem', fontSize: '0.875rem', color: '#6b7280' }}>
-                        {invite.perfil}
-                      </td>
-                      <td style={{ padding: '0.75rem', fontSize: '0.875rem', color: '#6b7280' }}>
-                        {new Date(invite.expires_at).toLocaleDateString('pt-BR')}
-                      </td>
-                      <td style={{ padding: '0.75rem' }}>
-                        <div style={{ display: 'flex', gap: '0.5rem' }}>
-                          <button
-                            onClick={() => copyInviteLink(invite.token)}
-                            style={{
-                              padding: '0.25rem 0.75rem',
-                              backgroundColor: '#3b82f6',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              fontSize: '0.75rem',
-                            }}
-                          >
-                            Copiar Link
-                          </button>
-                          <button
-                            onClick={() => handleCancelInvite(invite.id)}
-                            style={{
-                              padding: '0.25rem 0.75rem',
-                              backgroundColor: '#ef4444',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              fontSize: '0.75rem',
-                            }}
-                          >
-                            Cancelar
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                  {invites.map(invite => {
+                    const active = isInviteActive(invite);
+                    return (
+                      <tr key={invite.id} style={{ borderTop: '1px solid #e5e7eb' }}>
+                        <td style={{ padding: '0.75rem', fontSize: '0.875rem', color: '#1f2937' }}>
+                          <span style={{
+                            padding: '0.25rem 0.75rem',
+                            borderRadius: '9999px',
+                            fontSize: '0.75rem',
+                            backgroundColor: '#dbeafe',
+                            color: '#1e40af',
+                          }}>
+                            {invite.perfil}
+                          </span>
+                        </td>
+                        <td style={{ padding: '0.75rem', fontSize: '0.875rem', color: '#6b7280' }}>
+                          {invite.current_uses} / {invite.max_uses}
+                        </td>
+                        <td style={{ padding: '0.75rem', fontSize: '0.875rem', color: '#6b7280' }}>
+                          {new Date(invite.expires_at).toLocaleDateString('pt-BR')}
+                        </td>
+                        <td style={{ padding: '0.75rem', fontSize: '0.875rem' }}>
+                          <span style={{
+                            padding: '0.25rem 0.75rem',
+                            borderRadius: '9999px',
+                            fontSize: '0.75rem',
+                            backgroundColor: active ? '#d1fae5' : '#fee2e2',
+                            color: active ? '#065f46' : '#991b1b',
+                          }}>
+                            {active ? 'Ativo' : 'Inativo'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '0.75rem' }}>
+                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            {active && (
+                              <button
+                                onClick={() => copyInviteLink(invite.token)}
+                                style={{
+                                  padding: '0.25rem 0.75rem',
+                                  backgroundColor: '#3b82f6',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer',
+                                  fontSize: '0.75rem',
+                                }}
+                              >
+                                Copiar Link
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleCancelInvite(invite.id)}
+                              style={{
+                                padding: '0.25rem 0.75rem',
+                                backgroundColor: '#ef4444',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontSize: '0.75rem',
+                              }}
+                            >
+                              Excluir
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             )}
@@ -323,30 +356,11 @@ export default function Settings() {
             maxWidth: '400px',
           }}>
             <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1.5rem', color: '#1f2937' }}>
-              Convidar Usuário
+              Gerar Link de Convite
             </h2>
 
             <form onSubmit={handleSendInvite}>
               <div style={{ marginBottom: '1rem' }}>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
-                  Email *
-                </label>
-                <input
-                  type="email"
-                  required
-                  value={inviteForm.email}
-                  onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
-                  style={{
-                    width: '100%',
-                    padding: '0.5rem',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '6px',
-                    fontSize: '0.875rem',
-                  }}
-                />
-              </div>
-
-              <div style={{ marginBottom: '1.5rem' }}>
                 <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
                   Perfil *
                 </label>
@@ -366,6 +380,31 @@ export default function Settings() {
                   <option value="gestor">Gestor</option>
                   <option value="admin">Administrador</option>
                 </select>
+              </div>
+
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
+                  Número de Usos *
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="1000"
+                  required
+                  value={inviteForm.max_uses}
+                  onChange={(e) => setInviteForm({ ...inviteForm, max_uses: parseInt(e.target.value) || 1 })}
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '6px',
+                    fontSize: '0.875rem',
+                  }}
+                  placeholder="Quantas pessoas podem usar este link?"
+                />
+                <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem' }}>
+                  Número máximo de pessoas que podem usar este link
+                </div>
               </div>
 
               <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
@@ -396,7 +435,7 @@ export default function Settings() {
                     fontSize: '0.875rem',
                   }}
                 >
-                  Enviar Convite
+                  Gerar Link
                 </button>
               </div>
             </form>

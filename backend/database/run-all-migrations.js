@@ -37,6 +37,11 @@ async function runAllMigrations() {
     const migration018 = require('./migrations/018-fix-users-organization');
     await migration018.up();
 
+    // Migration 019: Update invites system
+    console.log('📦 Migration 019: Atualizando sistema de convites...');
+    const migration019 = require('./migrations/019-update-invites-system');
+    await migration019.up();
+
     // Criar tabela locais_armazenamento se não existir
     console.log('📦 Criando tabela locais_armazenamento...');
     await pool.query(`
