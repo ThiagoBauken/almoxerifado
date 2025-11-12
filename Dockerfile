@@ -33,6 +33,9 @@ COPY backend/ ./
 # Copiar build do frontend para pasta public
 COPY --from=frontend-builder /frontend/dist ./public
 
+# Tornar entrypoint executável
+RUN chmod +x entrypoint.sh
+
 # Expor porta
 EXPOSE 3000
 
@@ -40,5 +43,5 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s \
   CMD node -e "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
-# Iniciar servidor (migrations devem ser rodadas manualmente)
-CMD ["npm", "start"]
+# Usar entrypoint que roda migrations antes de iniciar
+ENTRYPOINT ["sh", "entrypoint.sh"]
