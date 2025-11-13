@@ -17,7 +17,7 @@ async function up() {
         titulo VARCHAR(255) NOT NULL,
         mensagem TEXT,
         reference_type VARCHAR(50),
-        reference_id INTEGER,
+        reference_id TEXT,
         link TEXT,
         read BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
