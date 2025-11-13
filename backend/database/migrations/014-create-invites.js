@@ -11,14 +11,15 @@ async function up() {
       CREATE TABLE IF NOT EXISTS invites (
         id SERIAL PRIMARY KEY,
         organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-        email VARCHAR(255) NOT NULL,
+        email VARCHAR(255),
         perfil VARCHAR(50) NOT NULL DEFAULT 'funcionario',
         token VARCHAR(255) UNIQUE NOT NULL,
-        invited_by INTEGER REFERENCES users(id),
+        invited_by UUID REFERENCES users(id),
         expires_at TIMESTAMP NOT NULL,
         accepted_at TIMESTAMP,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(organization_id, email)
+        max_uses INTEGER DEFAULT 1,
+        current_uses INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
 
