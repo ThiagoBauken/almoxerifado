@@ -74,7 +74,7 @@ router.post(
       .isIn(['transferencia', 'manutencao', 'devolucao'])
       .withMessage('Tipo inválido'),
     body('de_usuario_id').notEmpty().withMessage('Usuário remetente é obrigatório'),
-    body('para_usuario_id').notEmpty().withMessage('Usuário destinatário é obrigatório'),
+    // para_usuario_id é opcional agora - pode ser devolução ao estoque
   ],
   async (req, res) => {
     const client = await pool.connect();
@@ -102,6 +102,7 @@ router.post(
         foto_comprovante,
         motivo,
         observacoes,
+        devolver_estoque, // Novo campo para indicar devolução ao estoque
       } = req.body;
 
       // Verificar se item existe e está disponível
@@ -130,6 +131,58 @@ router.post(
         return res.status(400).json({
           success: false,
           message: `Item não pode ser transferido (estado: ${item.estado})`,
+        });
+      }
+
+      // DEVOLUÇÃO AO ESTOQUE - Fluxo direto sem notificação
+      if (devolver_estoque === true) {
+        // Atualizar item diretamente para o estoque
+        await client.query(
+          `UPDATE items
+           SET estado = 'disponivel_estoque',
+               localizacao_tipo = 'almoxarifado',
+               funcionario_id = NULL,
+               updated_at = NOW()
+           WHERE id = $1`,
+          [item_id]
+        );
+
+        // Registrar a devolução na tabela de transferências como concluída
+        const transferResult = await client.query(
+          `INSERT INTO transfers (
+            item_id, tipo, de_usuario_id, para_usuario_id,
+            de_localizacao, para_localizacao, status,
+            assinatura_remetente, foto_comprovante, motivo, observacoes,
+            data_aceitacao
+          )
+          VALUES ($1, 'devolucao', $2, NULL, $3, 'estoque', 'concluida', $4, $5, $6, $7, NOW())
+          RETURNING *`,
+          [
+            item_id,
+            de_usuario_id,
+            de_localizacao,
+            assinatura_remetente,
+            foto_comprovante,
+            motivo || 'Devolução ao estoque',
+            observacoes,
+          ]
+        );
+
+        await client.query('COMMIT');
+
+        return res.status(201).json({
+          success: true,
+          message: 'Item devolvido ao estoque com sucesso',
+          data: transferResult.rows[0],
+        });
+      }
+
+      // TRANSFERÊNCIA NORMAL PARA OUTRO USUÁRIO
+      if (!para_usuario_id) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          success: false,
+          message: 'Destinatário é obrigatório para transferências entre usuários',
         });
       }
 

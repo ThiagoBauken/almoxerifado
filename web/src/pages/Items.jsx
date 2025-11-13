@@ -466,15 +466,46 @@ export default function Items() {
                       {item.local_codigo || 'N/A'}
                     </td>
                     <td style={{ padding: '0.75rem', fontSize: '0.875rem' }}>
-                      <span style={{
-                        padding: '0.25rem 0.75rem',
-                        borderRadius: '9999px',
-                        fontSize: '0.75rem',
-                        backgroundColor: item.estado === 'disponivel' ? '#d1fae5' : '#fef3c7',
-                        color: item.estado === 'disponivel' ? '#065f46' : '#92400e',
-                      }}>
-                        {item.estado}
-                      </span>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                        <span style={{
+                          padding: '0.25rem 0.75rem',
+                          borderRadius: '9999px',
+                          fontSize: '0.75rem',
+                          backgroundColor:
+                            item.estado === 'disponivel' || item.estado === 'disponivel_estoque' ? '#d1fae5' :
+                            item.estado === 'com_funcionario' ? '#dbeafe' :
+                            item.estado === 'pendente_aceitacao' || item.estado === 'em_transito' ? '#fef3c7' :
+                            '#fee2e2',
+                          color:
+                            item.estado === 'disponivel' || item.estado === 'disponivel_estoque' ? '#065f46' :
+                            item.estado === 'com_funcionario' ? '#1e40af' :
+                            item.estado === 'pendente_aceitacao' || item.estado === 'em_transito' ? '#92400e' :
+                            '#991b1b',
+                          display: 'inline-block',
+                        }}>
+                          {item.estado === 'disponivel_estoque' ? 'Estoque' :
+                           item.estado === 'com_funcionario' ? 'Com Funcionário' :
+                           item.estado === 'pendente_aceitacao' ? 'Pendente' :
+                           item.estado === 'em_transito' ? 'Em Trânsito' :
+                           item.estado}
+                        </span>
+                        {/* Mostrar detalhes adicionais */}
+                        {item.funcionario_nome && (
+                          <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+                            👤 {item.funcionario_nome}
+                          </span>
+                        )}
+                        {(item.estado === 'disponivel_estoque' || item.localizacao_tipo === 'almoxarifado') && (
+                          <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+                            🏪 Almoxarifado
+                          </span>
+                        )}
+                        {item.obra_nome && (
+                          <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+                            🏗️ {item.obra_nome}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td style={{ padding: '0.75rem' }}>
                       <div style={{ display: 'flex', gap: '0.5rem' }}>

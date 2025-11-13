@@ -16,6 +16,7 @@ export default function Transfers() {
     tipo: 'transferencia',
     observacoes: '',
     motivo: '',
+    devolverAoEstoque: false,
   });
   const [currentUser, setCurrentUser] = useState(null);
   const [showQRModal, setShowQRModal] = useState(false);
@@ -97,13 +98,20 @@ export default function Transfers() {
       return;
     }
 
-    if (!formData.para_usuario_id) {
-      alert('Selecione o destinatário');
+    // Se não for devolução ao estoque, destinatário é obrigatório
+    if (!formData.devolverAoEstoque && !formData.para_usuario_id) {
+      alert('Selecione o destinatário ou marque "Devolver ao Estoque"');
       return;
     }
 
     if (!currentUser) {
       alert('Usuário não identificado');
+      return;
+    }
+
+    // Devolução ao estoque não pode ser offline
+    if (offline && formData.devolverAoEstoque) {
+      alert('Devolução ao estoque deve ser feita online');
       return;
     }
 
@@ -127,6 +135,41 @@ export default function Transfers() {
 
     // Modo online - enviar para API
     try {
+      // DEVOLUÇÃO AO ESTOQUE - processa cada item individualmente
+      if (formData.devolverAoEstoque) {
+        let sucessos = 0;
+        for (const item_id of selectedItems) {
+          try {
+            await api.post('/transfers', {
+              item_id,
+              tipo: 'devolucao',
+              de_usuario_id: currentUser.id,
+              devolver_estoque: true,
+              observacoes: formData.observacoes || 'Devolução ao estoque',
+            });
+            sucessos++;
+          } catch (err) {
+            console.error(`Erro ao devolver item ${item_id}:`, err);
+          }
+        }
+
+        alert(`✅ ${sucessos} ${sucessos === 1 ? 'item devolvido' : 'itens devolvidos'} ao estoque com sucesso!`);
+
+        // Resetar formulário
+        setFormData({
+          para_usuario_id: '',
+          para_localizacao: '',
+          tipo: 'transferencia',
+          observacoes: '',
+          motivo: '',
+          devolverAoEstoque: false,
+        });
+        setSelectedItems([]);
+        loadData();
+        return;
+      }
+
+      // TRANSFERÊNCIA NORMAL PARA OUTRO USUÁRIO
       if (selectedItems.length === 1) {
         // Transferência única
         await api.post('/transfers', {
@@ -160,6 +203,7 @@ export default function Transfers() {
         tipo: 'transferencia',
         observacoes: '',
         motivo: '',
+        devolverAoEstoque: false,
       });
       setSelectedItems([]);
 
@@ -546,12 +590,65 @@ export default function Transfers() {
                   </select>
                 </div>
 
+                {/* Checkbox Devolver ao Estoque */}
+                <div style={{
+                  marginBottom: '1.5rem',
+                  padding: '1rem',
+                  backgroundColor: formData.devolverAoEstoque ? '#dcfce7' : '#f9fafb',
+                  border: formData.devolverAoEstoque ? '2px solid #10b981' : '1px solid #e5e7eb',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+                onClick={() => setFormData({
+                  ...formData,
+                  devolverAoEstoque: !formData.devolverAoEstoque,
+                  para_usuario_id: !formData.devolverAoEstoque ? '' : formData.para_usuario_id // Limpa usuário se marcar
+                })}
+                >
+                  <label style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.75rem',
+                    cursor: 'pointer',
+                    fontSize: '0.875rem',
+                    fontWeight: '500',
+                    color: formData.devolverAoEstoque ? '#047857' : '#374151',
+                  }}>
+                    <input
+                      type="checkbox"
+                      checked={formData.devolverAoEstoque}
+                      onChange={() => {}} // Handled by div onClick
+                      style={{
+                        width: '18px',
+                        height: '18px',
+                        cursor: 'pointer',
+                        accentColor: '#10b981'
+                      }}
+                    />
+                    <span>
+                      {formData.devolverAoEstoque ? '✅ Devolvendo ao Estoque do Almoxarifado' : '📦 Devolver ao Estoque (sem destinatário)'}
+                    </span>
+                  </label>
+                  {formData.devolverAoEstoque && (
+                    <div style={{
+                      marginTop: '0.5rem',
+                      fontSize: '0.75rem',
+                      color: '#047857',
+                      marginLeft: '2rem'
+                    }}>
+                      Os itens selecionados serão devolvidos diretamente ao estoque
+                    </div>
+                  )}
+                </div>
+
                 <div style={{ marginBottom: '1.5rem' }}>
                   <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
-                    Para Usuário *
+                    Para Usuário {!formData.devolverAoEstoque && '*'}
                   </label>
                   <select
-                    required
+                    required={!formData.devolverAoEstoque}
+                    disabled={formData.devolverAoEstoque}
                     value={formData.para_usuario_id}
                     onChange={(e) => setFormData({ ...formData, para_usuario_id: e.target.value })}
                     style={{
@@ -560,9 +657,14 @@ export default function Transfers() {
                       border: '1px solid #d1d5db',
                       borderRadius: '6px',
                       fontSize: '0.875rem',
+                      backgroundColor: formData.devolverAoEstoque ? '#f3f4f6' : 'white',
+                      cursor: formData.devolverAoEstoque ? 'not-allowed' : 'default',
+                      opacity: formData.devolverAoEstoque ? 0.6 : 1,
                     }}
                   >
-                    <option value="">Selecione o destinatário...</option>
+                    <option value="">
+                      {formData.devolverAoEstoque ? 'Sem destinatário (devolução ao estoque)' : 'Selecione o destinatário...'}
+                    </option>
                     {users
                       .filter(u => currentUser && u.id !== currentUser.id)
                       .map(user => (
@@ -653,23 +755,24 @@ export default function Transfers() {
                       fontWeight: '500',
                     }}
                   >
-                    📡 Enviar Online
+                    {formData.devolverAoEstoque ? '🏪 Devolver ao Estoque' : '📡 Enviar Online'}
                   </button>
 
                   <button
                     type="button"
-                    disabled={selectedItems.length === 0}
+                    disabled={selectedItems.length === 0 || formData.devolverAoEstoque}
                     onClick={(e) => handleSubmit(e, true)}
                     style={{
                       padding: '0.75rem 1rem',
-                      backgroundColor: selectedItems.length === 0 ? '#9ca3af' : '#10b981',
+                      backgroundColor: (selectedItems.length === 0 || formData.devolverAoEstoque) ? '#9ca3af' : '#10b981',
                       color: 'white',
                       border: 'none',
                       borderRadius: '6px',
-                      cursor: selectedItems.length === 0 ? 'not-allowed' : 'pointer',
+                      cursor: (selectedItems.length === 0 || formData.devolverAoEstoque) ? 'not-allowed' : 'pointer',
                       fontSize: '0.875rem',
                       fontWeight: '500',
                     }}
+                    title={formData.devolverAoEstoque ? 'Devolução ao estoque deve ser feita online' : ''}
                   >
                     📱 QR Code
                   </button>
