@@ -30,9 +30,27 @@ export default function Notifications() {
       const userStr = localStorage.getItem('user');
       if (userStr) {
         const user = JSON.parse(userStr);
-        const userTransfers = (transfersRes.data.data || []).filter(
-          t => t.para_usuario_id === user.id && t.status === 'pendente'
-        );
+        const userTransfers = (transfersRes.data.data || []).filter(t => {
+          // Transferências normais direcionadas ao usuário
+          if (t.para_usuario_id === user.id && t.status === 'pendente') {
+            return true;
+          }
+
+          // Devoluções ao estoque - qualquer almoxarife/gestor/admin pode aprovar
+          // EXCETO se for a própria pessoa que enviou
+          if (
+            t.tipo === 'devolucao' &&
+            t.para_localizacao === 'estoque' &&
+            t.status === 'pendente' &&
+            t.para_usuario_id === null &&
+            t.de_usuario_id !== user.id && // Não mostrar suas próprias devoluções
+            ['almoxarife', 'gestor', 'admin'].includes(user.perfil)
+          ) {
+            return true;
+          }
+
+          return false;
+        });
         setPendingTransfers(userTransfers);
       }
     } catch (error) {
@@ -210,22 +228,29 @@ export default function Notifications() {
                                 padding: '0.25rem 0.75rem',
                                 borderRadius: '9999px',
                                 fontSize: '0.75rem',
-                                backgroundColor: '#fef3c7',
-                                color: '#92400e',
+                                backgroundColor: transfer.tipo === 'devolucao' && transfer.para_localizacao === 'estoque' ? '#dcfce7' : '#fef3c7',
+                                color: transfer.tipo === 'devolucao' && transfer.para_localizacao === 'estoque' ? '#047857' : '#92400e',
                                 fontWeight: '600',
                               }}>
-                                {transfer.tipo}
+                                {transfer.tipo === 'devolucao' && transfer.para_localizacao === 'estoque' ? '🏪 Devolução ao Estoque' : transfer.tipo}
                               </span>
                               <span style={{ fontSize: '0.875rem', color: '#6b7280' }}>
                                 {formatDate(transfer.data_envio)}
                               </span>
                             </div>
                             <h3 style={{ fontSize: '1.125rem', fontWeight: '600', color: '#1f2937', marginBottom: '0.5rem' }}>
-                              Transferência de: {transfer.de_usuario_nome}
+                              {transfer.tipo === 'devolucao' && transfer.para_localizacao === 'estoque'
+                                ? `Devolução de: ${transfer.de_usuario_nome}`
+                                : `Transferência de: ${transfer.de_usuario_nome}`}
                             </h3>
                             <p style={{ fontSize: '0.875rem', color: '#6b7280' }}>
                               Item: {transfer.item_nome} {transfer.item_lacre && `(${transfer.item_lacre})`}
                             </p>
+                            {transfer.tipo === 'devolucao' && transfer.para_localizacao === 'estoque' && (
+                              <p style={{ fontSize: '0.75rem', color: '#047857', marginTop: '0.25rem', fontWeight: '500' }}>
+                                ℹ️ Este item será devolvido ao estoque após aprovação
+                              </p>
+                            )}
                           </div>
                         </div>
 
