@@ -98,12 +98,9 @@ export default function Transfers() {
       return;
     }
 
-    // Destinatário sempre obrigatório
-    if (!formData.para_usuario_id) {
-      const mensagem = formData.devolverAoEstoque
-        ? 'Selecione um almoxarife, gestor ou admin para aprovar a devolução'
-        : 'Selecione o destinatário';
-      alert(mensagem);
+    // Destinatário obrigatório apenas para transferências normais
+    if (!formData.devolverAoEstoque && !formData.para_usuario_id) {
+      alert('Selecione o destinatário');
       return;
     }
 
@@ -138,27 +135,31 @@ export default function Transfers() {
 
     // Modo online - enviar para API
     try {
-      // DEVOLUÇÃO AO ESTOQUE - envia para aprovação
+      // DEVOLUÇÃO AO ESTOQUE - envia para aprovação de todos almoxarifes/gestores/admins
       if (formData.devolverAoEstoque) {
-        // Processar cada item com devolver_estoque=true
+        // Processar cada item com devolver_estoque=true (sem para_usuario_id)
         let sucessos = 0;
+        let mensagemResposta = '';
         for (const item_id of selectedItems) {
           try {
-            await api.post('/transfers', {
+            const response = await api.post('/transfers', {
               item_id,
               tipo: 'devolucao',
               de_usuario_id: currentUser.id,
-              para_usuario_id: formData.para_usuario_id,
               devolver_estoque: true,
               observacoes: formData.observacoes || 'Devolução ao estoque',
             });
             sucessos++;
+            // Pegar mensagem do backend sobre quantos responsáveis foram notificados
+            if (response.data.message) {
+              mensagemResposta = response.data.message;
+            }
           } catch (err) {
             console.error(`Erro ao enviar devolução do item ${item_id}:`, err);
           }
         }
 
-        alert(`✅ ${sucessos} ${sucessos === 1 ? 'devolução enviada' : 'devoluções enviadas'} para aprovação!`);
+        alert(`✅ ${sucessos} ${sucessos === 1 ? 'devolução enviada' : 'devoluções enviadas'} para aprovação!\n${mensagemResposta}`);
 
         // Resetar formulário
         setFormData({
@@ -642,50 +643,41 @@ export default function Transfers() {
                       color: '#047857',
                       marginLeft: '2rem'
                     }}>
-                      Selecione um almoxarife, gestor ou admin para aprovar a devolução ao estoque
+                      Todos os almoxarifes, gestores e admins serão notificados. Qualquer um deles poderá aprovar ou rejeitar a devolução.
                     </div>
                   )}
                 </div>
 
-                <div style={{ marginBottom: '1.5rem' }}>
-                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
-                    {formData.devolverAoEstoque ? 'Aprovar Devolução *' : 'Para Usuário *'}
-                  </label>
-                  <select
-                    required
-                    value={formData.para_usuario_id}
-                    onChange={(e) => setFormData({ ...formData, para_usuario_id: e.target.value })}
-                    style={{
-                      width: '100%',
-                      padding: '0.75rem',
-                      border: '1px solid #d1d5db',
-                      borderRadius: '6px',
-                      fontSize: '0.875rem',
-                      backgroundColor: 'white',
-                    }}
-                  >
-                    <option value="">
-                      {formData.devolverAoEstoque
-                        ? 'Selecione quem aprovará a devolução...'
-                        : 'Selecione o destinatário...'}
-                    </option>
-                    {users
-                      .filter(u => {
-                        if (!currentUser) return false;
-                        if (u.id === currentUser.id) return false;
-                        // Se for devolução, mostrar apenas almoxarife/gestor/admin
-                        if (formData.devolverAoEstoque) {
-                          return ['almoxarife', 'gestor', 'admin'].includes(u.perfil);
-                        }
-                        return true;
-                      })
-                      .map(user => (
-                        <option key={user.id} value={user.id}>
-                          {user.nome} ({user.perfil})
-                        </option>
-                      ))}
-                  </select>
-                </div>
+                {/* Campo de destinatário - só aparece quando NÃO for devolução ao estoque */}
+                {!formData.devolverAoEstoque && (
+                  <div style={{ marginBottom: '1.5rem' }}>
+                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
+                      Para Usuário *
+                    </label>
+                    <select
+                      required
+                      value={formData.para_usuario_id}
+                      onChange={(e) => setFormData({ ...formData, para_usuario_id: e.target.value })}
+                      style={{
+                        width: '100%',
+                        padding: '0.75rem',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '6px',
+                        fontSize: '0.875rem',
+                        backgroundColor: 'white',
+                      }}
+                    >
+                      <option value="">Selecione o destinatário...</option>
+                      {users
+                        .filter(u => currentUser && u.id !== currentUser.id)
+                        .map(user => (
+                          <option key={user.id} value={user.id}>
+                            {user.nome} ({user.perfil})
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                )}
 
                 <div style={{ marginBottom: '1.5rem' }}>
                   <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>

@@ -134,52 +134,36 @@ router.post(
         });
       }
 
-      // DEVOLUÇÃO AO ESTOQUE - Requer aprovação de almoxarife/gestor/admin
+      // DEVOLUÇÃO AO ESTOQUE - Notifica todos almoxarife/gestor/admin
       if (devolver_estoque === true) {
-        if (!para_usuario_id) {
-          await client.query('ROLLBACK');
-          return res.status(400).json({
-            success: false,
-            message: 'Selecione um almoxarife, gestor ou admin para aprovar a devolução',
-          });
-        }
-
-        // Verificar se destinatário tem permissão para aprovar (almoxarife, gestor ou admin)
-        const userCheck = await client.query(
-          'SELECT perfil FROM users WHERE id = $1',
-          [para_usuario_id]
+        // Buscar TODOS os usuários que podem aprovar (almoxarife, gestor, admin)
+        const aprovadoresResult = await client.query(
+          `SELECT id, nome, perfil FROM users
+           WHERE perfil IN ('almoxarife', 'gestor', 'admin')
+           AND organization_id = $1`,
+          [req.user.organization_id]
         );
 
-        if (userCheck.rows.length === 0) {
+        if (aprovadoresResult.rows.length === 0) {
           await client.query('ROLLBACK');
           return res.status(400).json({
             success: false,
-            message: 'Destinatário não encontrado',
+            message: 'Não há almoxarifes, gestores ou admins disponíveis para aprovar',
           });
         }
 
-        const perfilDestino = userCheck.rows[0].perfil;
-        if (!['almoxarife', 'gestor', 'admin'].includes(perfilDestino)) {
-          await client.query('ROLLBACK');
-          return res.status(400).json({
-            success: false,
-            message: 'Apenas almoxarife, gestor ou admin podem aprovar devoluções ao estoque',
-          });
-        }
-
-        // Criar transferência pendente de devolução
+        // Criar transferência pendente de devolução (sem destinatário específico)
         const transferResult = await client.query(
           `INSERT INTO transfers (
             item_id, tipo, de_usuario_id, para_usuario_id,
             de_localizacao, para_localizacao, status,
             assinatura_remetente, foto_comprovante, motivo, observacoes
           )
-          VALUES ($1, 'devolucao', $2, $3, $4, 'estoque', 'pendente', $5, $6, $7, $8)
+          VALUES ($1, 'devolucao', $2, NULL, $3, 'estoque', 'pendente', $4, $5, $6, $7)
           RETURNING *`,
           [
             item_id,
             de_usuario_id,
-            para_usuario_id,
             de_localizacao,
             assinatura_remetente,
             foto_comprovante,
@@ -200,22 +184,24 @@ router.post(
           [item_id]
         );
 
-        // Criar notificação para o aprovador
-        await createNotification(client, {
-          user_id: para_usuario_id,
-          tipo: 'transfer_received',
-          titulo: 'Devolução ao Estoque Pendente',
-          mensagem: `${item.nome} aguarda aprovação para retornar ao estoque. Acesse para aceitar ou rejeitar.`,
-          reference_type: 'transfer',
-          reference_id: transfer.id,
-          link: `/notifications`,
-        });
+        // Criar notificação para TODOS os aprovadores
+        for (const aprovador of aprovadoresResult.rows) {
+          await createNotification(client, {
+            user_id: aprovador.id,
+            tipo: 'transfer_received',
+            titulo: 'Devolução ao Estoque Pendente',
+            mensagem: `${item.nome} aguarda aprovação para retornar ao estoque. Acesse para aceitar ou rejeitar.`,
+            reference_type: 'transfer',
+            reference_id: transfer.id,
+            link: `/notifications`,
+          });
+        }
 
         await client.query('COMMIT');
 
         return res.status(201).json({
           success: true,
-          message: 'Devolução enviada para aprovação',
+          message: `Devolução enviada para aprovação de ${aprovadoresResult.rows.length} ${aprovadoresResult.rows.length === 1 ? 'responsável' : 'responsáveis'}`,
           data: transfer,
         });
       }
@@ -340,17 +326,27 @@ router.put('/:id/respond', async (req, res) => {
 
     const newStatus = accepted ? 'concluida' : 'cancelada';
 
-    // Atualizar transferência
+    // Atualizar transferência (registrar quem respondeu como para_usuario_id)
     await client.query(
       `UPDATE transfers
        SET status = $1,
            data_aceitacao = NOW(),
-           assinatura_destinatario = $2,
-           foto_comprovante = COALESCE($3, foto_comprovante),
-           observacoes = COALESCE($4, observacoes),
+           para_usuario_id = $2,
+           assinatura_destinatario = $3,
+           foto_comprovante = COALESCE($4, foto_comprovante),
+           observacoes = COALESCE($5, observacoes),
            updated_at = NOW()
-       WHERE id = $5`,
-      [newStatus, assinatura_destinatario, foto_comprovante, observacoes, id]
+       WHERE id = $6`,
+      [newStatus, req.user.id, assinatura_destinatario, foto_comprovante, observacoes, id]
+    );
+
+    // IMPORTANTE: Deletar todas as notificações relacionadas a esta transferência
+    // para que os outros aprovadores não vejam mais a notificação
+    await client.query(
+      `DELETE FROM notifications
+       WHERE reference_type = 'transfer'
+       AND reference_id = $1`,
+      [id]
     );
 
     // Atualizar item
