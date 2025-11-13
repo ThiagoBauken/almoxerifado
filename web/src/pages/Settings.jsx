@@ -45,7 +45,11 @@ export default function Settings() {
     try {
       const res = await api.post('/invites', inviteForm);
 
-      alert(`Convite criado! Link: ${res.data.inviteLink}`);
+      // Copiar link automaticamente após criar
+      const link = `${window.location.origin}/invite/${res.data.data.token}`;
+      navigator.clipboard.writeText(link);
+
+      alert('✅ Convite criado com sucesso!\n📋 Link copiado para a área de transferência!');
 
       setShowInviteModal(false);
       setInviteForm({ perfil: 'funcionario', max_uses: 1 });
@@ -69,7 +73,9 @@ export default function Settings() {
   const copyInviteLink = (token) => {
     const link = `${window.location.origin}/invite/${token}`;
     navigator.clipboard.writeText(link);
-    alert('Link copiado!');
+
+    // Mostrar o link copiado para o usuário
+    alert(`✅ Link copiado para a área de transferência!\n\n${link}`);
   };
 
   const isInviteActive = (invite) => {
