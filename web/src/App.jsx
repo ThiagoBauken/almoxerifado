@@ -13,6 +13,7 @@ import History from './pages/History';
 import Users from './pages/Users';
 import Settings from './pages/Settings';
 import AcceptInvite from './pages/AcceptInvite';
+import Notifications from './pages/Notifications';
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
@@ -84,6 +85,7 @@ function App() {
           <Route path="/storage" element={<PrivateRoute><Storage /></PrivateRoute>} />
           <Route path="/obras" element={<PrivateRoute><Obras /></PrivateRoute>} />
           <Route path="/transfers" element={<PrivateRoute><Transfers /></PrivateRoute>} />
+          <Route path="/notifications" element={<PrivateRoute><Notifications /></PrivateRoute>} />
           <Route path="/history" element={<PrivateRoute><History /></PrivateRoute>} />
           <Route path="/users" element={<PrivateRoute><Users /></PrivateRoute>} />
           <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />

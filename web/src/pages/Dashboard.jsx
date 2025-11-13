@@ -24,17 +24,25 @@ export default function Dashboard() {
 
   const loadData = async () => {
     try {
-      const [itemsRes, categoriesRes, usersRes, movimentacoesRes] = await Promise.all([
+      // Fazer chamadas em paralelo, mas permitir que movimentacoes falhe
+      const [itemsRes, categoriesRes, usersRes] = await Promise.all([
         api.get('/items?limit=1000'),
         api.get('/categories'),
         api.get('/users'),
-        api.get('/movimentacoes?limit=100'),
       ]);
+
+      let movimentacoes = [];
+      try {
+        const movimentacoesRes = await api.get('/movimentacoes?limit=100');
+        movimentacoes = movimentacoesRes.data.data || [];
+      } catch (movError) {
+        console.warn('Movimentações não disponíveis:', movError);
+        // Continuar mesmo se movimentações falharem
+      }
 
       const items = itemsRes.data.data || [];
       const categories = categoriesRes.data.data || [];
       const users = usersRes.data.data || [];
-      const movimentacoes = movimentacoesRes.data.data || [];
 
       // Stats
       const lowStock = items.filter(i => i.quantidade <= (i.estoque_minimo || 0) && i.estoque_minimo > 0);

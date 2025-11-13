@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import api from '../services/api';
 
 export default function Layout({ children }) {
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const menuItems = [
     { path: '/dashboard', label: 'Dashboard', icon: '📊' },
@@ -15,10 +17,30 @@ export default function Layout({ children }) {
     { path: '/storage', label: 'Locais', icon: '📍' },
     { path: '/obras', label: 'Obras', icon: '🏗️' },
     { path: '/transfers', label: 'Transferências', icon: '🔄' },
+    { path: '/notifications', label: 'Notificações', icon: '🔔', badge: true },
     { path: '/history', label: 'Histórico', icon: '📋' },
     { path: '/users', label: 'Usuários', icon: '👥', adminOnly: true },
     { path: '/settings', label: 'Configurações', icon: '⚙️' },
   ];
+
+  useEffect(() => {
+    // Fetch unread notifications count
+    const fetchUnreadCount = async () => {
+      try {
+        const res = await api.get('/notifications/unread-count');
+        setUnreadCount(res.data.count || 0);
+      } catch (error) {
+        console.error('Erro ao buscar contagem de notificações:', error);
+      }
+    };
+
+    fetchUnreadCount();
+
+    // Poll every 30 seconds
+    const interval = setInterval(fetchUnreadCount, 30000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -80,6 +102,7 @@ export default function Layout({ children }) {
                 textDecoration: 'none',
                 backgroundColor: location.pathname === item.path ? '#374151' : 'transparent',
                 transition: 'background-color 0.2s',
+                position: 'relative',
               }}
               onMouseEnter={(e) => {
                 if (location.pathname !== item.path) {
@@ -93,7 +116,21 @@ export default function Layout({ children }) {
               }}
             >
               <span style={{ fontSize: '1.25rem' }}>{item.icon}</span>
-              {sidebarOpen && <span>{item.label}</span>}
+              {sidebarOpen && <span style={{ flex: 1 }}>{item.label}</span>}
+              {item.badge && unreadCount > 0 && (
+                <span style={{
+                  backgroundColor: '#ef4444',
+                  color: 'white',
+                  borderRadius: '9999px',
+                  padding: '0.125rem 0.5rem',
+                  fontSize: '0.75rem',
+                  fontWeight: 'bold',
+                  minWidth: '20px',
+                  textAlign: 'center',
+                }}>
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
             </Link>
           ))}
         </nav>

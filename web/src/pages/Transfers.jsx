@@ -1,104 +1,185 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import api from '../services/api';
 import Layout from '../components/Layout';
+import QRCode from 'qrcode';
 
 export default function Transfers() {
   const [items, setItems] = useState([]);
+  const [users, setUsers] = useState([]);
   const [storageLocations, setStorageLocations] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedItems, setSelectedItems] = useState([]);
   const [formData, setFormData] = useState({
-    item_id: '',
-    local_to_id: '',
-    quantidade: 1,
-    observacao: '',
+    para_usuario_id: '',
+    para_localizacao: '',
+    tipo: 'transferencia',
+    observacoes: '',
+    motivo: '',
   });
-  const [selectedItem, setSelectedItem] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [showQRModal, setShowQRModal] = useState(false);
+  const [qrCodeDataURL, setQrCodeDataURL] = useState('');
+  const [transferData, setTransferData] = useState(null);
+  const qrCanvasRef = useRef(null);
 
   useEffect(() => {
     loadData();
+    // Get current user from localStorage
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      setCurrentUser(JSON.parse(userStr));
+    }
   }, []);
 
   const loadData = async () => {
     try {
-      const [itemsRes, storageRes] = await Promise.all([
-        api.get('/items'),
+      const [itemsRes, usersRes, storageRes] = await Promise.all([
+        api.get('/items?limit=1000'),
+        api.get('/users'),
         api.get('/storage'),
       ]);
+
       setItems(itemsRes.data.data || []);
+      setUsers(usersRes.data.data || []);
       setStorageLocations(storageRes.data.data || []);
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
+      alert('Erro ao carregar dados');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleItemChange = (itemId) => {
-    const item = items.find(i => i.id === parseInt(itemId));
-    setSelectedItem(item);
-    setFormData({
-      ...formData,
-      item_id: itemId,
-      quantidade: 1,
+  const handleItemToggle = (itemId) => {
+    setSelectedItems(prev => {
+      if (prev.includes(itemId)) {
+        return prev.filter(id => id !== itemId);
+      } else {
+        return [...prev, itemId];
+      }
     });
   };
 
-  const handleSubmit = async (e) => {
+  const generateQRCode = async (data) => {
+    try {
+      const qrString = JSON.stringify(data);
+      const dataURL = await QRCode.toDataURL(qrString, {
+        width: 300,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#ffffff',
+        },
+      });
+      setQrCodeDataURL(dataURL);
+      setTransferData(data);
+      setShowQRModal(true);
+    } catch (error) {
+      console.error('Erro ao gerar QR Code:', error);
+    }
+  };
+
+  const handleSubmit = async (e, offline = false) => {
     e.preventDefault();
 
-    if (!selectedItem) {
-      alert('Selecione um item');
+    if (selectedItems.length === 0) {
+      alert('Selecione pelo menos um item');
       return;
     }
 
-    if (!formData.local_to_id) {
-      alert('Selecione o local de destino');
+    if (!formData.para_usuario_id) {
+      alert('Selecione o destinatário');
       return;
     }
 
-    if (selectedItem.local_armazenamento_id === parseInt(formData.local_to_id)) {
-      alert('O local de destino não pode ser o mesmo que o local atual');
+    if (!currentUser) {
+      alert('Usuário não identificado');
       return;
     }
 
-    if (formData.quantidade > selectedItem.quantidade) {
-      alert('Quantidade maior que a disponível');
+    // Modo offline - apenas gerar QR Code
+    if (offline) {
+      const qrData = {
+        type: 'transfer',
+        item_ids: selectedItems,
+        de_usuario_id: currentUser.id,
+        para_usuario_id: formData.para_usuario_id,
+        tipo: formData.tipo,
+        para_localizacao: formData.para_localizacao,
+        motivo: formData.motivo,
+        observacoes: formData.observacoes,
+        timestamp: new Date().toISOString(),
+      };
+
+      generateQRCode(qrData);
       return;
     }
 
+    // Modo online - enviar para API
     try {
-      // Registrar movimentação
-      await api.post('/movimentacoes', {
-        item_id: formData.item_id,
-        tipo: 'transferencia',
-        quantidade: formData.quantidade,
-        local_from_id: selectedItem.local_armazenamento_id,
-        local_to_id: formData.local_to_id,
-        observacao: formData.observacao,
-      });
+      if (selectedItems.length === 1) {
+        // Transferência única
+        await api.post('/transfers', {
+          item_id: selectedItems[0],
+          tipo: formData.tipo,
+          de_usuario_id: currentUser.id,
+          para_usuario_id: formData.para_usuario_id,
+          de_localizacao: '',
+          para_localizacao: formData.para_localizacao || '',
+          motivo: formData.motivo,
+          observacoes: formData.observacoes,
+        });
 
-      // Atualizar local do item
-      await api.put(`/items/${formData.item_id}`, {
-        local_armazenamento_id: formData.local_to_id,
-      });
+        alert('Transferência criada com sucesso! O destinatário receberá uma notificação.');
+      } else {
+        // Transferência em lote
+        await api.post('/transfers/batch', {
+          item_ids: selectedItems,
+          de_usuario_id: currentUser.id,
+          para_usuario_id: formData.para_usuario_id,
+          observacoes: formData.observacoes,
+        });
 
-      alert('Transferência realizada com sucesso!');
+        alert(`${selectedItems.length} transferências criadas com sucesso! O destinatário receberá uma notificação.`);
+      }
 
       // Resetar formulário
       setFormData({
-        item_id: '',
-        local_to_id: '',
-        quantidade: 1,
-        observacao: '',
+        para_usuario_id: '',
+        para_localizacao: '',
+        tipo: 'transferencia',
+        observacoes: '',
+        motivo: '',
       });
-      setSelectedItem(null);
+      setSelectedItems([]);
 
       // Recarregar dados
       loadData();
     } catch (error) {
-      console.error('Erro ao realizar transferência:', error);
-      alert(error.response?.data?.message || 'Erro ao realizar transferência');
+      console.error('Erro ao criar transferência:', error);
+      alert(error.response?.data?.message || 'Erro ao criar transferência');
     }
+  };
+
+  // Filtrar itens: mostrar apenas itens que o usuário atual possui ou que estão no almoxarifado
+  const availableItems = items.filter(item => {
+    if (!currentUser) return false;
+
+    // Itens com o usuário atual
+    const withCurrentUser = item.funcionario_id === currentUser.id;
+
+    // Itens disponíveis no estoque (podem ser transferidos por almoxarifes/gestores/admin)
+    const inStock = item.estado === 'disponivel_estoque' || item.localizacao_tipo === 'almoxarifado';
+    const canTransferFromStock = ['almoxarife', 'gestor', 'admin'].includes(currentUser.perfil);
+
+    return withCurrentUser || (inStock && canTransferFromStock);
+  });
+
+  const getItemLocation = (item) => {
+    if (item.funcionario_nome) return `Com: ${item.funcionario_nome}`;
+    if (item.local_codigo) return `Local: ${item.local_codigo}`;
+    if (item.obra_nome) return `Obra: ${item.obra_nome}`;
+    return 'Localização não definida';
   };
 
   return (
@@ -108,163 +189,36 @@ export default function Transfers() {
           🔄 Transferências
         </h1>
 
-        <div style={{
-          backgroundColor: 'white',
-          borderRadius: '8px',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-          padding: '2rem',
-          maxWidth: '600px',
-          margin: '0 auto',
-        }}>
-          {loading ? (
-            <p style={{ color: '#6b7280', textAlign: 'center' }}>Carregando...</p>
-          ) : (
-            <form onSubmit={handleSubmit}>
-              <div style={{ marginBottom: '1.5rem' }}>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
-                  Item *
-                </label>
-                <select
-                  required
-                  value={formData.item_id}
-                  onChange={(e) => handleItemChange(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '6px',
-                    fontSize: '0.875rem',
-                  }}
-                >
-                  <option value="">Selecione um item...</option>
-                  {items.map(item => (
-                    <option key={item.id} value={item.id}>
-                      {item.nome} ({item.codigo}) - Qtd: {item.quantidade}
-                    </option>
-                  ))}
-                </select>
-              </div>
+        {loading ? (
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '8px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+            padding: '2rem',
+            textAlign: 'center',
+            color: '#6b7280',
+          }}>
+            Carregando...
+          </div>
+        ) : (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 400px',
+            gap: '1.5rem',
+            alignItems: 'start',
+          }}>
+            {/* Lista de Itens */}
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '8px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+              padding: '1.5rem',
+            }}>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '1rem', color: '#1f2937' }}>
+                Selecione os Itens para Transferir
+              </h2>
 
-              {selectedItem && (
-                <>
-                  <div style={{
-                    padding: '1rem',
-                    backgroundColor: '#f9fafb',
-                    borderRadius: '6px',
-                    marginBottom: '1.5rem',
-                    border: '1px solid #e5e7eb',
-                  }}>
-                    <h3 style={{ fontSize: '0.875rem', fontWeight: '600', color: '#374151', marginBottom: '0.5rem' }}>
-                      Informações do Item
-                    </h3>
-                    <div style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '0.25rem' }}>
-                      <strong>Nome:</strong> {selectedItem.nome}
-                    </div>
-                    <div style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '0.25rem' }}>
-                      <strong>Código:</strong> {selectedItem.codigo}
-                    </div>
-                    <div style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '0.25rem' }}>
-                      <strong>Quantidade Disponível:</strong> {selectedItem.quantidade}
-                    </div>
-                    <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>
-                      <strong>Local Atual:</strong> {selectedItem.local_codigo || 'Sem local definido'}
-                    </div>
-                  </div>
-
-                  <div style={{ marginBottom: '1.5rem' }}>
-                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
-                      Local de Destino *
-                    </label>
-                    <select
-                      required
-                      value={formData.local_to_id}
-                      onChange={(e) => setFormData({ ...formData, local_to_id: e.target.value })}
-                      style={{
-                        width: '100%',
-                        padding: '0.75rem',
-                        border: '1px solid #d1d5db',
-                        borderRadius: '6px',
-                        fontSize: '0.875rem',
-                      }}
-                    >
-                      <option value="">Selecione o local de destino...</option>
-                      {storageLocations.map(loc => (
-                        <option
-                          key={loc.id}
-                          value={loc.id}
-                          disabled={loc.id === selectedItem.local_armazenamento_id}
-                        >
-                          {loc.codigo} - {loc.descricao}
-                          {loc.id === selectedItem.local_armazenamento_id ? ' (Local Atual)' : ''}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div style={{ marginBottom: '1.5rem' }}>
-                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
-                      Quantidade *
-                    </label>
-                    <input
-                      type="number"
-                      required
-                      min="1"
-                      max={selectedItem.quantidade}
-                      value={formData.quantidade}
-                      onChange={(e) => setFormData({ ...formData, quantidade: parseInt(e.target.value) || 1 })}
-                      style={{
-                        width: '100%',
-                        padding: '0.75rem',
-                        border: '1px solid #d1d5db',
-                        borderRadius: '6px',
-                        fontSize: '0.875rem',
-                      }}
-                    />
-                    <p style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem' }}>
-                      Máximo: {selectedItem.quantidade} unidades
-                    </p>
-                  </div>
-
-                  <div style={{ marginBottom: '1.5rem' }}>
-                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
-                      Observações
-                    </label>
-                    <textarea
-                      rows="3"
-                      value={formData.observacao}
-                      onChange={(e) => setFormData({ ...formData, observacao: e.target.value })}
-                      placeholder="Motivo da transferência, responsável pela solicitação, etc."
-                      style={{
-                        width: '100%',
-                        padding: '0.75rem',
-                        border: '1px solid #d1d5db',
-                        borderRadius: '6px',
-                        fontSize: '0.875rem',
-                        resize: 'vertical',
-                      }}
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    style={{
-                      width: '100%',
-                      padding: '0.75rem 1.5rem',
-                      backgroundColor: '#2563eb',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      fontSize: '0.875rem',
-                      fontWeight: '500',
-                    }}
-                  >
-                    Realizar Transferência
-                  </button>
-                </>
-              )}
-
-              {!selectedItem && (
+              {availableItems.length === 0 ? (
                 <div style={{
                   padding: '2rem',
                   textAlign: 'center',
@@ -272,12 +226,372 @@ export default function Transfers() {
                   backgroundColor: '#f9fafb',
                   borderRadius: '6px',
                 }}>
-                  <p>Selecione um item para iniciar a transferência</p>
+                  <p>Você não possui itens disponíveis para transferência</p>
+                </div>
+              ) : (
+                <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
+                  {availableItems.map(item => (
+                    <div
+                      key={item.id}
+                      onClick={() => handleItemToggle(item.id)}
+                      style={{
+                        padding: '1rem',
+                        marginBottom: '0.5rem',
+                        border: selectedItems.includes(item.id) ? '2px solid #2563eb' : '1px solid #e5e7eb',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        backgroundColor: selectedItems.includes(item.id) ? '#eff6ff' : 'white',
+                        transition: 'all 0.2s',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                          <input
+                            type="checkbox"
+                            checked={selectedItems.includes(item.id)}
+                            onChange={() => {}}
+                            style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                          />
+                          <div>
+                            <div style={{ fontWeight: '600', color: '#1f2937', marginBottom: '0.25rem' }}>
+                              {item.nome}
+                            </div>
+                            <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>
+                              Código: {item.codigo} | Qtd: {item.quantidade}
+                            </div>
+                            <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>
+                              {getItemLocation(item)}
+                            </div>
+                          </div>
+                        </div>
+                        {item.foto && (
+                          <img
+                            src={item.foto}
+                            alt={item.nome}
+                            style={{
+                              width: '50px',
+                              height: '50px',
+                              objectFit: 'cover',
+                              borderRadius: '4px',
+                            }}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
-            </form>
-          )}
-        </div>
+            </div>
+
+            {/* Formulário */}
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '8px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+              padding: '1.5rem',
+              position: 'sticky',
+              top: '2rem',
+            }}>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '1rem', color: '#1f2937' }}>
+                Detalhes da Transferência
+              </h2>
+
+              <div style={{
+                padding: '1rem',
+                backgroundColor: '#f9fafb',
+                borderRadius: '6px',
+                marginBottom: '1.5rem',
+                border: '1px solid #e5e7eb',
+              }}>
+                <div style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '0.5rem' }}>
+                  Itens selecionados:
+                </div>
+                <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#2563eb' }}>
+                  {selectedItems.length}
+                </div>
+              </div>
+
+              <form onSubmit={handleSubmit}>
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
+                    Tipo de Transferência *
+                  </label>
+                  <select
+                    required
+                    value={formData.tipo}
+                    onChange={(e) => setFormData({ ...formData, tipo: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '0.875rem',
+                    }}
+                  >
+                    <option value="transferencia">Transferência</option>
+                    <option value="manutencao">Manutenção</option>
+                    <option value="devolucao">Devolução</option>
+                  </select>
+                </div>
+
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
+                    Para Usuário *
+                  </label>
+                  <select
+                    required
+                    value={formData.para_usuario_id}
+                    onChange={(e) => setFormData({ ...formData, para_usuario_id: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '0.875rem',
+                    }}
+                  >
+                    <option value="">Selecione o destinatário...</option>
+                    {users
+                      .filter(u => currentUser && u.id !== currentUser.id)
+                      .map(user => (
+                        <option key={user.id} value={user.id}>
+                          {user.nome} ({user.perfil})
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
+                    Local de Destino (opcional)
+                  </label>
+                  <select
+                    value={formData.para_localizacao}
+                    onChange={(e) => setFormData({ ...formData, para_localizacao: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '0.875rem',
+                    }}
+                  >
+                    <option value="">Sem local específico</option>
+                    {storageLocations.map(loc => (
+                      <option key={loc.id} value={loc.codigo}>
+                        {loc.codigo} - {loc.descricao}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {selectedItems.length === 1 && (
+                  <div style={{ marginBottom: '1.5rem' }}>
+                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
+                      Motivo
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.motivo}
+                      onChange={(e) => setFormData({ ...formData, motivo: e.target.value })}
+                      placeholder="Ex: Necessário para obra X"
+                      style={{
+                        width: '100%',
+                        padding: '0.75rem',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '6px',
+                        fontSize: '0.875rem',
+                      }}
+                    />
+                  </div>
+                )}
+
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
+                    Observações
+                  </label>
+                  <textarea
+                    rows="3"
+                    value={formData.observacoes}
+                    onChange={(e) => setFormData({ ...formData, observacoes: e.target.value })}
+                    placeholder="Informações adicionais sobre a transferência..."
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '0.875rem',
+                      resize: 'vertical',
+                    }}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                  <button
+                    type="submit"
+                    disabled={selectedItems.length === 0}
+                    style={{
+                      padding: '0.75rem 1rem',
+                      backgroundColor: selectedItems.length === 0 ? '#9ca3af' : '#2563eb',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: selectedItems.length === 0 ? 'not-allowed' : 'pointer',
+                      fontSize: '0.875rem',
+                      fontWeight: '500',
+                    }}
+                  >
+                    📡 Enviar Online
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={selectedItems.length === 0}
+                    onClick={(e) => handleSubmit(e, true)}
+                    style={{
+                      padding: '0.75rem 1rem',
+                      backgroundColor: selectedItems.length === 0 ? '#9ca3af' : '#10b981',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: selectedItems.length === 0 ? 'not-allowed' : 'pointer',
+                      fontSize: '0.875rem',
+                      fontWeight: '500',
+                    }}
+                  >
+                    📱 QR Code
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Modal QR Code */}
+        {showQRModal && (
+          <div
+            onClick={() => setShowQRModal(false)}
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000,
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                backgroundColor: 'white',
+                borderRadius: '12px',
+                padding: '2rem',
+                maxWidth: '500px',
+                width: '90%',
+                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+              }}
+            >
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1rem', textAlign: 'center', color: '#1f2937' }}>
+                QR Code da Transferência
+              </h2>
+
+              <p style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '1.5rem', textAlign: 'center' }}>
+                O destinatário pode escanear este QR Code para aceitar a transferência offline.
+                Os dados serão sincronizados quando ambos estiverem online.
+              </p>
+
+              <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                marginBottom: '1.5rem',
+                padding: '1.5rem',
+                backgroundColor: '#f9fafb',
+                borderRadius: '8px',
+              }}>
+                {qrCodeDataURL && (
+                  <img
+                    src={qrCodeDataURL}
+                    alt="QR Code da Transferência"
+                    style={{
+                      width: '300px',
+                      height: '300px',
+                      border: '4px solid white',
+                      borderRadius: '8px',
+                      boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+                    }}
+                  />
+                )}
+              </div>
+
+              {transferData && (
+                <div style={{
+                  padding: '1rem',
+                  backgroundColor: '#f3f4f6',
+                  borderRadius: '6px',
+                  marginBottom: '1.5rem',
+                  fontSize: '0.875rem',
+                }}>
+                  <div style={{ marginBottom: '0.5rem', color: '#374151' }}>
+                    <strong>Tipo:</strong> {transferData.tipo}
+                  </div>
+                  <div style={{ marginBottom: '0.5rem', color: '#374151' }}>
+                    <strong>Itens:</strong> {transferData.item_ids.length}
+                  </div>
+                  {transferData.observacoes && (
+                    <div style={{ color: '#6b7280' }}>
+                      <strong>Obs:</strong> {transferData.observacoes}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <button
+                  onClick={() => {
+                    const link = document.createElement('a');
+                    link.download = `transfer-qr-${Date.now()}.png`;
+                    link.href = qrCodeDataURL;
+                    link.click();
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '0.75rem',
+                    backgroundColor: '#10b981',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '0.875rem',
+                    fontWeight: '500',
+                  }}
+                >
+                  💾 Baixar QR Code
+                </button>
+
+                <button
+                  onClick={() => setShowQRModal(false)}
+                  style={{
+                    flex: 1,
+                    padding: '0.75rem',
+                    backgroundColor: '#6b7280',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '0.875rem',
+                    fontWeight: '500',
+                  }}
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </Layout>
   );

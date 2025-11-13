@@ -2,6 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const pool = require('../database/config');
 const { authMiddleware } = require('./auth');
+const { createNotification } = require('./notifications');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -166,6 +167,17 @@ router.post(
         [item_id]
       );
 
+      // Criar notificação para o destinatário
+      await createNotification(client, {
+        user_id: para_usuario_id,
+        tipo: 'transfer_received',
+        titulo: 'Nova Transferência Recebida',
+        mensagem: `Você recebeu uma transferência do item ${item.nome}. Acesse para aceitar ou rejeitar.`,
+        reference_type: 'transfer',
+        reference_id: transfer.id,
+        link: `/notifications`,
+      });
+
       await client.query('COMMIT');
 
       res.status(201).json({
@@ -328,7 +340,8 @@ router.post('/batch', async (req, res) => {
         [item_id, de_usuario_id, para_usuario_id, observacoes]
       );
 
-      transfers.push(transferResult.rows[0]);
+      const transfer = transferResult.rows[0];
+      transfers.push(transfer);
 
       // Atualizar item
       await client.query(
@@ -339,6 +352,19 @@ router.post('/batch', async (req, res) => {
          WHERE id = $1`,
         [item_id]
       );
+    }
+
+    // Criar notificação única para todas as transferências em lote
+    if (transfers.length > 0) {
+      await createNotification(client, {
+        user_id: para_usuario_id,
+        tipo: 'transfer_received',
+        titulo: 'Novas Transferências Recebidas',
+        mensagem: `Você recebeu ${transfers.length} transferências. Acesse para aceitar ou rejeitar.`,
+        reference_type: 'transfer_batch',
+        reference_id: null,
+        link: `/notifications`,
+      });
     }
 
     await client.query('COMMIT');
