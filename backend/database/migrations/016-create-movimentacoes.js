@@ -10,8 +10,8 @@ async function up() {
     await client.query(`
       CREATE TABLE IF NOT EXISTS movimentacoes (
         id SERIAL PRIMARY KEY,
-        item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
-        usuario_id INTEGER NOT NULL REFERENCES users(id),
+        item_id UUID NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+        usuario_id UUID NOT NULL REFERENCES users(id),
         tipo VARCHAR(50) NOT NULL,
         quantidade INTEGER NOT NULL,
         local_from_id INTEGER REFERENCES locais_armazenamento(id),
