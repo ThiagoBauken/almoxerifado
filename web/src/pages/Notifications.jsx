@@ -37,13 +37,12 @@ export default function Notifications() {
           }
 
           // Devoluções ao estoque - qualquer almoxarife/gestor/admin pode aprovar
-          // EXCETO se for a própria pessoa que enviou
+          // (incluindo quem enviou, se for admin)
           if (
             t.tipo === 'devolucao' &&
             t.para_localizacao === 'estoque' &&
             t.status === 'pendente' &&
             t.para_usuario_id === null &&
-            t.de_usuario_id !== user.id && // Não mostrar suas próprias devoluções
             ['almoxarife', 'gestor', 'admin'].includes(user.perfil)
           ) {
             return true;

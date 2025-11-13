@@ -184,12 +184,8 @@ router.post(
           [item_id]
         );
 
-        // Criar notificação para TODOS os aprovadores (exceto quem está enviando)
-        let notificadosCount = 0;
+        // Criar notificação para TODOS os aprovadores (incluindo quem está enviando)
         for (const aprovador of aprovadoresResult.rows) {
-          // Não notificar a si mesmo
-          if (aprovador.id === de_usuario_id) continue;
-
           await createNotification(client, {
             user_id: aprovador.id,
             tipo: 'transfer_received',
@@ -199,19 +195,13 @@ router.post(
             reference_id: transfer.id,
             link: `/notifications`,
           });
-          notificadosCount++;
         }
 
         await client.query('COMMIT');
 
-        // Mensagem diferente se ninguém foi notificado (usuário é o único admin)
-        const mensagem = notificadosCount === 0
-          ? 'Devolução criada. Aguardando outro aprovador para processar (você não pode aprovar sua própria devolução).'
-          : `Devolução enviada para aprovação de ${notificadosCount} ${notificadosCount === 1 ? 'responsável' : 'responsáveis'}`;
-
         return res.status(201).json({
           success: true,
-          message: mensagem,
+          message: `Devolução enviada para aprovação de ${aprovadoresResult.rows.length} ${aprovadoresResult.rows.length === 1 ? 'responsável' : 'responsáveis'}`,
           data: transfer,
         });
       }
