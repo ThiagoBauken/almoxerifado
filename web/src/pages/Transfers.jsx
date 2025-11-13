@@ -98,9 +98,12 @@ export default function Transfers() {
       return;
     }
 
-    // Se não for devolução ao estoque, destinatário é obrigatório
-    if (!formData.devolverAoEstoque && !formData.para_usuario_id) {
-      alert('Selecione o destinatário ou marque "Devolver ao Estoque"');
+    // Destinatário sempre obrigatório
+    if (!formData.para_usuario_id) {
+      const mensagem = formData.devolverAoEstoque
+        ? 'Selecione um almoxarife, gestor ou admin para aprovar a devolução'
+        : 'Selecione o destinatário';
+      alert(mensagem);
       return;
     }
 
@@ -135,8 +138,9 @@ export default function Transfers() {
 
     // Modo online - enviar para API
     try {
-      // DEVOLUÇÃO AO ESTOQUE - processa cada item individualmente
+      // DEVOLUÇÃO AO ESTOQUE - envia para aprovação
       if (formData.devolverAoEstoque) {
+        // Processar cada item com devolver_estoque=true
         let sucessos = 0;
         for (const item_id of selectedItems) {
           try {
@@ -144,16 +148,17 @@ export default function Transfers() {
               item_id,
               tipo: 'devolucao',
               de_usuario_id: currentUser.id,
+              para_usuario_id: formData.para_usuario_id,
               devolver_estoque: true,
               observacoes: formData.observacoes || 'Devolução ao estoque',
             });
             sucessos++;
           } catch (err) {
-            console.error(`Erro ao devolver item ${item_id}:`, err);
+            console.error(`Erro ao enviar devolução do item ${item_id}:`, err);
           }
         }
 
-        alert(`✅ ${sucessos} ${sucessos === 1 ? 'item devolvido' : 'itens devolvidos'} ao estoque com sucesso!`);
+        alert(`✅ ${sucessos} ${sucessos === 1 ? 'devolução enviada' : 'devoluções enviadas'} para aprovação!`);
 
         // Resetar formulário
         setFormData({
@@ -603,7 +608,7 @@ export default function Transfers() {
                 onClick={() => setFormData({
                   ...formData,
                   devolverAoEstoque: !formData.devolverAoEstoque,
-                  para_usuario_id: !formData.devolverAoEstoque ? '' : formData.para_usuario_id // Limpa usuário se marcar
+                  para_usuario_id: '' // Limpa usuário ao alternar
                 })}
                 >
                   <label style={{
@@ -627,7 +632,7 @@ export default function Transfers() {
                       }}
                     />
                     <span>
-                      {formData.devolverAoEstoque ? '✅ Devolvendo ao Estoque do Almoxarifado' : '📦 Devolver ao Estoque (sem destinatário)'}
+                      {formData.devolverAoEstoque ? '✅ Devolvendo ao Estoque (Requer Aprovação)' : '📦 Devolver ao Estoque'}
                     </span>
                   </label>
                   {formData.devolverAoEstoque && (
@@ -637,18 +642,17 @@ export default function Transfers() {
                       color: '#047857',
                       marginLeft: '2rem'
                     }}>
-                      Os itens selecionados serão devolvidos diretamente ao estoque
+                      Selecione um almoxarife, gestor ou admin para aprovar a devolução ao estoque
                     </div>
                   )}
                 </div>
 
                 <div style={{ marginBottom: '1.5rem' }}>
                   <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
-                    Para Usuário {!formData.devolverAoEstoque && '*'}
+                    {formData.devolverAoEstoque ? 'Aprovar Devolução *' : 'Para Usuário *'}
                   </label>
                   <select
-                    required={!formData.devolverAoEstoque}
-                    disabled={formData.devolverAoEstoque}
+                    required
                     value={formData.para_usuario_id}
                     onChange={(e) => setFormData({ ...formData, para_usuario_id: e.target.value })}
                     style={{
@@ -657,16 +661,24 @@ export default function Transfers() {
                       border: '1px solid #d1d5db',
                       borderRadius: '6px',
                       fontSize: '0.875rem',
-                      backgroundColor: formData.devolverAoEstoque ? '#f3f4f6' : 'white',
-                      cursor: formData.devolverAoEstoque ? 'not-allowed' : 'default',
-                      opacity: formData.devolverAoEstoque ? 0.6 : 1,
+                      backgroundColor: 'white',
                     }}
                   >
                     <option value="">
-                      {formData.devolverAoEstoque ? 'Sem destinatário (devolução ao estoque)' : 'Selecione o destinatário...'}
+                      {formData.devolverAoEstoque
+                        ? 'Selecione quem aprovará a devolução...'
+                        : 'Selecione o destinatário...'}
                     </option>
                     {users
-                      .filter(u => currentUser && u.id !== currentUser.id)
+                      .filter(u => {
+                        if (!currentUser) return false;
+                        if (u.id === currentUser.id) return false;
+                        // Se for devolução, mostrar apenas almoxarife/gestor/admin
+                        if (formData.devolverAoEstoque) {
+                          return ['almoxarife', 'gestor', 'admin'].includes(u.perfil);
+                        }
+                        return true;
+                      })
                       .map(user => (
                         <option key={user.id} value={user.id}>
                           {user.nome} ({user.perfil})
@@ -746,7 +758,7 @@ export default function Transfers() {
                     disabled={selectedItems.length === 0}
                     style={{
                       padding: '0.75rem 1rem',
-                      backgroundColor: selectedItems.length === 0 ? '#9ca3af' : '#2563eb',
+                      backgroundColor: selectedItems.length === 0 ? '#9ca3af' : formData.devolverAoEstoque ? '#10b981' : '#2563eb',
                       color: 'white',
                       border: 'none',
                       borderRadius: '6px',
@@ -755,7 +767,7 @@ export default function Transfers() {
                       fontWeight: '500',
                     }}
                   >
-                    {formData.devolverAoEstoque ? '🏪 Devolver ao Estoque' : '📡 Enviar Online'}
+                    {formData.devolverAoEstoque ? '🏪 Enviar para Aprovação' : '📡 Enviar Online'}
                   </button>
 
                   <button

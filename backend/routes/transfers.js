@@ -134,32 +134,52 @@ router.post(
         });
       }
 
-      // DEVOLUÇÃO AO ESTOQUE - Fluxo direto sem notificação
+      // DEVOLUÇÃO AO ESTOQUE - Requer aprovação de almoxarife/gestor/admin
       if (devolver_estoque === true) {
-        // Atualizar item diretamente para o estoque
-        await client.query(
-          `UPDATE items
-           SET estado = 'disponivel_estoque',
-               localizacao_tipo = 'almoxarifado',
-               funcionario_id = NULL,
-               updated_at = NOW()
-           WHERE id = $1`,
-          [item_id]
+        if (!para_usuario_id) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({
+            success: false,
+            message: 'Selecione um almoxarife, gestor ou admin para aprovar a devolução',
+          });
+        }
+
+        // Verificar se destinatário tem permissão para aprovar (almoxarife, gestor ou admin)
+        const userCheck = await client.query(
+          'SELECT perfil FROM users WHERE id = $1',
+          [para_usuario_id]
         );
 
-        // Registrar a devolução na tabela de transferências como concluída
+        if (userCheck.rows.length === 0) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({
+            success: false,
+            message: 'Destinatário não encontrado',
+          });
+        }
+
+        const perfilDestino = userCheck.rows[0].perfil;
+        if (!['almoxarife', 'gestor', 'admin'].includes(perfilDestino)) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({
+            success: false,
+            message: 'Apenas almoxarife, gestor ou admin podem aprovar devoluções ao estoque',
+          });
+        }
+
+        // Criar transferência pendente de devolução
         const transferResult = await client.query(
           `INSERT INTO transfers (
             item_id, tipo, de_usuario_id, para_usuario_id,
             de_localizacao, para_localizacao, status,
-            assinatura_remetente, foto_comprovante, motivo, observacoes,
-            data_aceitacao
+            assinatura_remetente, foto_comprovante, motivo, observacoes
           )
-          VALUES ($1, 'devolucao', $2, NULL, $3, 'estoque', 'concluida', $4, $5, $6, $7, NOW())
+          VALUES ($1, 'devolucao', $2, $3, $4, 'estoque', 'pendente', $5, $6, $7, $8)
           RETURNING *`,
           [
             item_id,
             de_usuario_id,
+            para_usuario_id,
             de_localizacao,
             assinatura_remetente,
             foto_comprovante,
@@ -168,12 +188,35 @@ router.post(
           ]
         );
 
+        const transfer = transferResult.rows[0];
+
+        // Atualizar item para pendente_aceitacao
+        await client.query(
+          `UPDATE items
+           SET estado = 'pendente_aceitacao',
+               localizacao_tipo = 'em_transito',
+               updated_at = NOW()
+           WHERE id = $1`,
+          [item_id]
+        );
+
+        // Criar notificação para o aprovador
+        await createNotification(client, {
+          user_id: para_usuario_id,
+          tipo: 'transfer_received',
+          titulo: 'Devolução ao Estoque Pendente',
+          mensagem: `${item.nome} aguarda aprovação para retornar ao estoque. Acesse para aceitar ou rejeitar.`,
+          reference_type: 'transfer',
+          reference_id: transfer.id,
+          link: `/notifications`,
+        });
+
         await client.query('COMMIT');
 
         return res.status(201).json({
           success: true,
-          message: 'Item devolvido ao estoque com sucesso',
-          data: transferResult.rows[0],
+          message: 'Devolução enviada para aprovação',
+          data: transfer,
         });
       }
 
@@ -182,7 +225,7 @@ router.post(
         await client.query('ROLLBACK');
         return res.status(400).json({
           success: false,
-          message: 'Destinatário é obrigatório para transferências entre usuários',
+          message: 'Destinatário é obrigatório para transferências',
         });
       }
 
@@ -312,16 +355,30 @@ router.put('/:id/respond', async (req, res) => {
 
     // Atualizar item
     if (accepted) {
-      // Aceito - mover item para destinatário
-      await client.query(
-        `UPDATE items
-         SET estado = 'com_funcionario',
-             localizacao_tipo = 'funcionario',
-             funcionario_id = $1,
-             updated_at = NOW()
-         WHERE id = $2`,
-        [transfer.para_usuario_id, transfer.item_id]
-      );
+      // Verificar se é uma DEVOLUÇÃO AO ESTOQUE
+      if (transfer.tipo === 'devolucao' && transfer.para_localizacao === 'estoque') {
+        // Aceito - item vai para o estoque (não para o destinatário)
+        await client.query(
+          `UPDATE items
+           SET estado = 'disponivel_estoque',
+               localizacao_tipo = 'almoxarifado',
+               funcionario_id = NULL,
+               updated_at = NOW()
+           WHERE id = $1`,
+          [transfer.item_id]
+        );
+      } else {
+        // Aceito - transferência normal, mover item para destinatário
+        await client.query(
+          `UPDATE items
+           SET estado = 'com_funcionario',
+               localizacao_tipo = 'funcionario',
+               funcionario_id = $1,
+               updated_at = NOW()
+           WHERE id = $2`,
+          [transfer.para_usuario_id, transfer.item_id]
+        );
+      }
     } else {
       // Rejeitado - voltar item para remetente
       await client.query(
