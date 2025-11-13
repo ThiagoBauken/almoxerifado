@@ -27,11 +27,8 @@ COPY backend/package*.json ./
 # Copiar código do backend (exceto node_modules)
 COPY backend/ ./
 
-# Instalar ferramentas de build necessárias para compilar bcrypt
-RUN apk add --no-cache python3 make g++
-
-# Instalar dependências do backend (força rebuild de nativos)
-RUN npm ci --production && npm rebuild bcrypt --build-from-source
+# Instalar dependências do backend
+RUN npm ci --production
 
 # Copiar build do frontend para pasta public
 COPY --from=frontend-builder /frontend/dist ./public
