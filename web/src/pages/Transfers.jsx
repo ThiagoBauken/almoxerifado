@@ -169,7 +169,11 @@ export default function Transfers() {
     const withCurrentUser = item.funcionario_id === currentUser.id;
 
     // Itens disponíveis no estoque (podem ser transferidos por almoxarifes/gestores/admin)
-    const inStock = item.estado === 'disponivel_estoque' || item.localizacao_tipo === 'almoxarifado';
+    const inStock =
+      item.estado === 'disponivel' ||
+      item.estado === 'disponivel_estoque' ||
+      item.localizacao_tipo === 'almoxarifado' ||
+      item.localizacao_tipo === 'estoque';
     const canTransferFromStock = ['almoxarife', 'gestor', 'admin'].includes(currentUser.perfil);
 
     return withCurrentUser || (inStock && canTransferFromStock);
