@@ -1,6 +1,6 @@
 const express = require('express');
 const pool = require('../database/config');
-const { authMiddleware } = require('./auth');
+const { authMiddleware, requireAlmoxarife } = require('./auth');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -52,7 +52,7 @@ router.get('/:id', async (req, res) => {
 
 // ==================== CRIAR CATEGORIA ====================
 
-router.post('/', async (req, res) => {
+router.post('/', requireAlmoxarife, async (req, res) => {
   try {
     const { nome, icone } = req.body;
 
@@ -86,7 +86,7 @@ router.post('/', async (req, res) => {
 
 // ==================== ATUALIZAR CATEGORIA ====================
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireAlmoxarife, async (req, res) => {
   try {
     const { id } = req.params;
     const { nome, icone } = req.body;
@@ -124,7 +124,7 @@ router.put('/:id', async (req, res) => {
 
 // ==================== DELETAR CATEGORIA ====================
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAlmoxarife, async (req, res) => {
   try {
     const { id } = req.params;
 

@@ -36,8 +36,8 @@ BEGIN
       usuario_id UUID NOT NULL REFERENCES users(id),
       tipo VARCHAR(50) NOT NULL,
       quantidade INTEGER NOT NULL,
-      local_from_id INTEGER REFERENCES locais_armazenamento(id),
-      local_to_id INTEGER REFERENCES locais_armazenamento(id),
+      local_from_id UUID REFERENCES locais_armazenamento(id),
+      local_to_id UUID REFERENCES locais_armazenamento(id),
       observacao TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );

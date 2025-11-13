@@ -2,7 +2,7 @@ const express = require('express');
 const crypto = require('crypto');
 const { body, validationResult } = require('express-validator');
 const pool = require('../database/config');
-const { authMiddleware } = require('./auth');
+const { authMiddleware, requireGestor } = require('./auth');
 
 const router = express.Router();
 
@@ -11,6 +11,7 @@ const router = express.Router();
 router.post(
   '/',
   authMiddleware,
+  requireGestor,
   [
     body('perfil').isIn(['funcionario', 'almoxarife', 'gestor', 'admin']).withMessage('Perfil inválido'),
     body('max_uses').optional().isInt({ min: 1, max: 1000 }).withMessage('Número de usos deve ser entre 1 e 1000'),
@@ -270,7 +271,7 @@ router.post('/accept/:token', async (req, res) => {
 
 // ==================== CANCELAR CONVITE ====================
 
-router.delete('/:id', authMiddleware, async (req, res) => {
+router.delete('/:id', authMiddleware, requireGestor, async (req, res) => {
   try {
     const { id } = req.params;
 

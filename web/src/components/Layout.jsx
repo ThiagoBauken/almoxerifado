@@ -11,16 +11,17 @@ export default function Layout({ children }) {
   const [unreadCount, setUnreadCount] = useState(0);
 
   const menuItems = [
-    { path: '/dashboard', label: 'Dashboard', icon: '📊' },
-    { path: '/items', label: 'Itens', icon: '📦' },
-    { path: '/categories', label: 'Categorias', icon: '🏷️' },
-    { path: '/storage', label: 'Locais', icon: '📍' },
-    { path: '/obras', label: 'Obras', icon: '🏗️' },
-    { path: '/transfers', label: 'Transferências', icon: '🔄' },
-    { path: '/notifications', label: 'Notificações', icon: '🔔', badge: true },
-    { path: '/history', label: 'Histórico', icon: '📋' },
-    { path: '/users', label: 'Usuários', icon: '👥', adminOnly: true },
-    { path: '/settings', label: 'Configurações', icon: '⚙️' },
+    { path: '/dashboard', label: 'Dashboard', icon: '📊', minPerfil: 'funcionario' },
+    { path: '/items', label: 'Itens', icon: '📦', minPerfil: 'almoxarife' }, // Apenas almoxarife+
+    { path: '/categories', label: 'Categorias', icon: '🏷️', minPerfil: 'almoxarife' }, // Apenas almoxarife+
+    { path: '/storage', label: 'Locais', icon: '📍', minPerfil: 'almoxarife' }, // Apenas almoxarife+
+    { path: '/obras', label: 'Obras', icon: '🏗️', minPerfil: 'gestor' }, // Apenas gestor+
+    { path: '/transfers', label: 'Transferências', icon: '🔄', minPerfil: 'funcionario' },
+    { path: '/scanner', label: 'Escanear QR', icon: '📷', minPerfil: 'funcionario' },
+    { path: '/notifications', label: 'Notificações', icon: '🔔', badge: true, minPerfil: 'funcionario' },
+    { path: '/history', label: 'Histórico', icon: '📋', minPerfil: 'funcionario' },
+    { path: '/users', label: 'Usuários', icon: '👥', minPerfil: 'admin' }, // Apenas admin
+    { path: '/settings', label: 'Configurações', icon: '⚙️', minPerfil: 'gestor' }, // Apenas gestor+ (criar convites)
   ];
 
   useEffect(() => {
@@ -30,7 +31,9 @@ export default function Layout({ children }) {
         const res = await api.get('/notifications/unread-count');
         setUnreadCount(res.data.count || 0);
       } catch (error) {
-        console.error('Erro ao buscar contagem de notificações:', error);
+        // Silenciar erro se tabela não existir ainda
+        console.debug('Notificações não disponíveis:', error.message);
+        setUnreadCount(0);
       }
     };
 
@@ -47,8 +50,21 @@ export default function Layout({ children }) {
     navigate('/login');
   };
 
+  // Hierarquia de perfis: admin > gestor > almoxarife > funcionario
+  const perfilHierarchy = {
+    'funcionario': 0,
+    'almoxarife': 1,
+    'gestor': 2,
+    'admin': 3,
+  };
+
+  const hasPermission = (minPerfil) => {
+    if (!user?.perfil || !minPerfil) return false;
+    return perfilHierarchy[user.perfil] >= perfilHierarchy[minPerfil];
+  };
+
   const visibleMenuItems = menuItems.filter(item =>
-    !item.adminOnly || user?.perfil === 'admin'
+    hasPermission(item.minPerfil)
   );
 
   return (

@@ -214,6 +214,55 @@ const authMiddleware = async (req, res, next) => {
   }
 };
 
+// ==================== MIDDLEWARE DE PERMISSÕES ====================
+
+// Hierarquia: admin > gestor > almoxarife > funcionario
+const perfilHierarchy = {
+  'funcionario': 0,
+  'almoxarife': 1,
+  'gestor': 2,
+  'admin': 3,
+};
+
+// Middleware: Requer almoxarife ou superior
+const requireAlmoxarife = (req, res, next) => {
+  const userLevel = perfilHierarchy[req.user.perfil] || 0;
+  const requiredLevel = perfilHierarchy['almoxarife'];
+
+  if (userLevel < requiredLevel) {
+    return res.status(403).json({
+      success: false,
+      message: 'Acesso negado. Requer perfil: Almoxarife ou superior',
+    });
+  }
+  next();
+};
+
+// Middleware: Requer gestor ou superior
+const requireGestor = (req, res, next) => {
+  const userLevel = perfilHierarchy[req.user.perfil] || 0;
+  const requiredLevel = perfilHierarchy['gestor'];
+
+  if (userLevel < requiredLevel) {
+    return res.status(403).json({
+      success: false,
+      message: 'Acesso negado. Requer perfil: Gestor ou superior',
+    });
+  }
+  next();
+};
+
+// Middleware: Requer admin
+const requireAdmin = (req, res, next) => {
+  if (req.user.perfil !== 'admin') {
+    return res.status(403).json({
+      success: false,
+      message: 'Acesso negado. Requer perfil: Administrador',
+    });
+  }
+  next();
+};
+
 // ==================== VERIFICAR TOKEN ====================
 
 router.get('/verify', authMiddleware, async (req, res) => {
@@ -245,3 +294,6 @@ router.get('/verify', authMiddleware, async (req, res) => {
 
 module.exports = router;
 module.exports.authMiddleware = authMiddleware;
+module.exports.requireAlmoxarife = requireAlmoxarife;
+module.exports.requireGestor = requireGestor;
+module.exports.requireAdmin = requireAdmin;

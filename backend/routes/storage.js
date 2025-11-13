@@ -1,6 +1,6 @@
 const express = require('express');
 const pool = require('../database/config');
-const { authMiddleware } = require('./auth');
+const { authMiddleware, requireAlmoxarife } = require('./auth');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -103,7 +103,7 @@ router.get('/:id', async (req, res) => {
 
 // ==================== CRIAR LOCAL ====================
 
-router.post('/', async (req, res) => {
+router.post('/', requireAlmoxarife, async (req, res) => {
   try {
     const { codigo, descricao, tipo, capacidade, setor, observacoes } = req.body;
 
@@ -153,7 +153,7 @@ router.post('/', async (req, res) => {
 
 // ==================== ATUALIZAR LOCAL ====================
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireAlmoxarife, async (req, res) => {
   try {
     const { id } = req.params;
     const { descricao, tipo, capacidade, setor, observacoes } = req.body;
@@ -194,7 +194,7 @@ router.put('/:id', async (req, res) => {
 
 // ==================== DELETAR LOCAL ====================
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAlmoxarife, async (req, res) => {
   try {
     const { id } = req.params;
 

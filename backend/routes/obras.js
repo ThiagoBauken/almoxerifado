@@ -1,6 +1,6 @@
 const express = require('express');
 const pool = require('../database/config');
-const { authMiddleware } = require('./auth');
+const { authMiddleware, requireGestor } = require('./auth');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -60,7 +60,7 @@ router.get('/:id', async (req, res) => {
 
 // ==================== CRIAR OBRA ====================
 
-router.post('/', async (req, res) => {
+router.post('/', requireGestor, async (req, res) => {
   try {
     const { nome, endereco, status, responsavel_id, data_inicio, data_conclusao, data_fim } = req.body;
 
@@ -100,7 +100,7 @@ router.post('/', async (req, res) => {
 
 // ==================== ATUALIZAR OBRA ====================
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireGestor, async (req, res) => {
   try {
     const { id } = req.params;
     const { nome, endereco, status, responsavel_id, data_inicio, data_conclusao, data_fim } = req.body;
@@ -145,7 +145,7 @@ router.put('/:id', async (req, res) => {
 
 // ==================== DELETAR OBRA ====================
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireGestor, async (req, res) => {
   try {
     const { id } = req.params;
 

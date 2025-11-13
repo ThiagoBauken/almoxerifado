@@ -1,7 +1,7 @@
 const express = require('express');
 const { body, validationResult, query } = require('express-validator');
 const pool = require('../database/config');
-const { authMiddleware } = require('./auth');
+const { authMiddleware, requireAlmoxarife } = require('./auth');
 
 const router = express.Router();
 
@@ -147,6 +147,7 @@ router.get('/:id', async (req, res) => {
 
 router.post(
   '/',
+  requireAlmoxarife, // Apenas almoxarife ou superior pode criar itens
   [
     body('nome').notEmpty().withMessage('Nome é obrigatório'),
   ],
@@ -289,17 +290,30 @@ router.post(
 
 // ==================== ATUALIZAR ITEM ====================
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireAlmoxarife, async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
+
+    // Helper: convert empty strings to null for UUID and numeric fields
+    const toNullIfEmpty = (value) => (value === '' || value === undefined) ? null : value;
+
+    // Fields that need empty string to null conversion
+    const uuidFields = ['categoria_id', 'localizacao_id', 'funcionario_id', 'obra_id', 'local_armazenamento_id'];
+    const numericFields = ['valor_unitario', 'metragem', 'quantidade', 'estoque_minimo', 'quantidade_disponivel'];
 
     // Construir query dinâmica
     const fields = Object.keys(updates);
     const setClause = fields
       .map((field, index) => `${field} = $${index + 2}`)
       .join(', ');
-    const values = fields.map((field) => updates[field]);
+    const values = fields.map((field) => {
+      // Apply toNullIfEmpty for UUID and numeric fields
+      if (uuidFields.includes(field) || numericFields.includes(field)) {
+        return toNullIfEmpty(updates[field]);
+      }
+      return updates[field];
+    });
 
     const result = await pool.query(
       `UPDATE items
@@ -332,7 +346,7 @@ router.put('/:id', async (req, res) => {
 
 // ==================== DELETAR ITEM ====================
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAlmoxarife, async (req, res) => {
   try {
     const { id } = req.params;
 

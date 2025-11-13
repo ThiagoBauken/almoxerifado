@@ -1,7 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const pool = require('../database/config');
-const { authMiddleware } = require('./auth');
+const { authMiddleware, requireAdmin } = require('./auth');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -47,7 +47,7 @@ router.get('/:id', async (req, res) => {
 
 // ==================== CRIAR USUÁRIO ====================
 
-router.post('/', async (req, res) => {
+router.post('/', requireAdmin, async (req, res) => {
   try {
     const { nome, email, senha, perfil, obra_id, foto } = req.body;
 
@@ -125,7 +125,7 @@ router.post('/', async (req, res) => {
 
 // ==================== ATUALIZAR USUÁRIO ====================
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { nome, email, perfil, obra_id, foto, senha } = req.body;
@@ -259,7 +259,7 @@ router.put('/:id/toggle-status', async (req, res) => {
 
 // ==================== DELETAR USUÁRIO ====================
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
 

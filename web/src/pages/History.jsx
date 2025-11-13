@@ -8,10 +8,12 @@ export default function History() {
   const [filters, setFilters] = useState({
     tipo: '',
     item_id: '',
+    usuario_id: '',
     data_inicio: '',
     data_fim: '',
   });
   const [items, setItems] = useState([]);
+  const [users, setUsers] = useState([]);
 
   useEffect(() => {
     loadData();
@@ -19,12 +21,14 @@ export default function History() {
 
   const loadData = async () => {
     try {
-      const [movRes, itemsRes] = await Promise.all([
+      const [movRes, itemsRes, usersRes] = await Promise.all([
         api.get('/movimentacoes'),
         api.get('/items'),
+        api.get('/users'),
       ]);
       setMovimentacoes(movRes.data.data || []);
       setItems(itemsRes.data.data || []);
+      setUsers(usersRes.data.data || []);
     } catch (error) {
       console.error('Erro ao carregar movimentações:', error);
     } finally {
@@ -38,6 +42,7 @@ export default function History() {
       const params = new URLSearchParams();
       if (filters.tipo) params.append('tipo', filters.tipo);
       if (filters.item_id) params.append('item_id', filters.item_id);
+      if (filters.usuario_id) params.append('usuario_id', filters.usuario_id);
       if (filters.data_inicio) params.append('data_inicio', filters.data_inicio);
       if (filters.data_fim) params.append('data_fim', filters.data_fim);
 
@@ -54,6 +59,7 @@ export default function History() {
     setFilters({
       tipo: '',
       item_id: '',
+      usuario_id: '',
       data_inicio: '',
       data_fim: '',
     });
@@ -161,6 +167,30 @@ export default function History() {
                 {items.map(item => (
                   <option key={item.id} value={item.id}>
                     {item.nome} ({item.codigo})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
+                Usuário
+              </label>
+              <select
+                value={filters.usuario_id}
+                onChange={(e) => setFilters({ ...filters, usuario_id: e.target.value })}
+                style={{
+                  width: '100%',
+                  padding: '0.5rem',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  fontSize: '0.875rem',
+                }}
+              >
+                <option value="">Todos</option>
+                {users.map(user => (
+                  <option key={user.id} value={user.id}>
+                    {user.nome}
                   </option>
                 ))}
               </select>

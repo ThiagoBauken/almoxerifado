@@ -6,6 +6,7 @@ import QRCode from 'qrcode';
 export default function Transfers() {
   const [items, setItems] = useState([]);
   const [users, setUsers] = useState([]);
+  const [obras, setObras] = useState([]);
   const [storageLocations, setStorageLocations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedItems, setSelectedItems] = useState([]);
@@ -22,6 +23,13 @@ export default function Transfers() {
   const [transferData, setTransferData] = useState(null);
   const qrCanvasRef = useRef(null);
 
+  // Estados para filtros
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterFuncionario, setFilterFuncionario] = useState('');
+  const [filterObra, setFilterObra] = useState('');
+  const [filterLocalizacao, setFilterLocalizacao] = useState('');
+  const [filterOrigem, setFilterOrigem] = useState(''); // meus_itens | estoque | todos
+
   useEffect(() => {
     loadData();
     // Get current user from localStorage
@@ -33,15 +41,17 @@ export default function Transfers() {
 
   const loadData = async () => {
     try {
-      const [itemsRes, usersRes, storageRes] = await Promise.all([
+      const [itemsRes, usersRes, storageRes, obrasRes] = await Promise.all([
         api.get('/items?limit=1000'),
         api.get('/users'),
         api.get('/storage'),
+        api.get('/obras'),
       ]);
 
       setItems(itemsRes.data.data || []);
       setUsers(usersRes.data.data || []);
       setStorageLocations(storageRes.data.data || []);
+      setObras(obrasRes.data.data || []);
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
       alert('Erro ao carregar dados');
@@ -179,6 +189,69 @@ export default function Transfers() {
     return withCurrentUser || (inStock && canTransferFromStock);
   });
 
+  // Aplicar filtros de busca e seleção
+  const filteredItems = availableItems.filter(item => {
+    // Filtro de busca por nome/lacre
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      const matchesSearch =
+        item.nome?.toLowerCase().includes(searchLower) ||
+        item.lacre?.toLowerCase().includes(searchLower);
+      if (!matchesSearch) return false;
+    }
+
+    // Filtro por ORIGEM (meus itens vs estoque) - para almoxarifes/gestores
+    if (filterOrigem && currentUser) {
+      if (filterOrigem === 'meus_itens') {
+        // Mostrar apenas itens que estão COM O USUÁRIO ATUAL
+        if (item.funcionario_id !== currentUser.id) return false;
+      } else if (filterOrigem === 'estoque') {
+        // Mostrar apenas itens do ESTOQUE/ALMOXARIFADO
+        const isInStock =
+          item.estado === 'disponivel' ||
+          item.estado === 'disponivel_estoque' ||
+          item.localizacao_tipo === 'almoxarifado' ||
+          item.localizacao_tipo === 'estoque';
+        if (!isInStock) return false;
+      }
+    }
+
+    // Filtro por funcionário
+    if (filterFuncionario && item.funcionario_id !== filterFuncionario) {
+      return false;
+    }
+
+    // Filtro por obra
+    if (filterObra && item.obra_id !== filterObra) {
+      return false;
+    }
+
+    // Filtro por localização/tipo
+    if (filterLocalizacao) {
+      if (filterLocalizacao === 'estoque') {
+        // Itens no estoque/almoxarifado
+        const isInStock =
+          item.localizacao_tipo === 'almoxarifado' ||
+          item.localizacao_tipo === 'estoque' ||
+          item.estado === 'disponivel_estoque';
+        if (!isInStock) return false;
+      } else if (filterLocalizacao === 'funcionario') {
+        // Itens com funcionários
+        if (!item.funcionario_id) return false;
+      }
+    }
+
+    return true;
+  });
+
+  const clearFilters = () => {
+    setSearchTerm('');
+    setFilterFuncionario('');
+    setFilterObra('');
+    setFilterLocalizacao('');
+    setFilterOrigem('');
+  };
+
   const getItemLocation = (item) => {
     if (item.funcionario_nome) return `Com: ${item.funcionario_nome}`;
     if (item.local_codigo) return `Local: ${item.local_codigo}`;
@@ -218,11 +291,142 @@ export default function Transfers() {
               boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
               padding: '1.5rem',
             }}>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '1rem', color: '#1f2937' }}>
-                Selecione os Itens para Transferir
-              </h2>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                <h2 style={{ fontSize: '1.25rem', fontWeight: '600', color: '#1f2937' }}>
+                  Selecione os Itens para Transferir
+                </h2>
+                <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>
+                  {filteredItems.length} {filteredItems.length === 1 ? 'item encontrado' : 'itens encontrados'}
+                </div>
+              </div>
 
-              {availableItems.length === 0 ? (
+              {/* Filtros */}
+              <div style={{
+                padding: '1rem',
+                backgroundColor: '#f9fafb',
+                borderRadius: '6px',
+                marginBottom: '1rem',
+                border: '1px solid #e5e7eb',
+              }}>
+                {/* Busca */}
+                <div style={{ marginBottom: '0.75rem' }}>
+                  <input
+                    type="text"
+                    placeholder="🔍 Buscar por nome ou lacre..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.625rem 0.75rem',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '0.875rem',
+                    }}
+                  />
+                </div>
+
+                {/* Filtro de ORIGEM - só para almoxarifes/gestores/admin */}
+                {currentUser && ['almoxarife', 'gestor', 'admin'].includes(currentUser.perfil) && (
+                  <div style={{ marginBottom: '0.75rem' }}>
+                    <select
+                      value={filterOrigem}
+                      onChange={(e) => setFilterOrigem(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '0.625rem',
+                        border: '2px solid #3b82f6',
+                        borderRadius: '6px',
+                        fontSize: '0.875rem',
+                        backgroundColor: 'white',
+                        fontWeight: '500',
+                      }}
+                    >
+                      <option value="">📦 Todos os Itens</option>
+                      <option value="meus_itens">👤 Meus Itens Pessoais</option>
+                      <option value="estoque">🏪 Itens do Estoque</option>
+                    </select>
+                  </div>
+                )}
+
+                {/* Filtros em linha */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                  <select
+                    value={filterFuncionario}
+                    onChange={(e) => setFilterFuncionario(e.target.value)}
+                    style={{
+                      padding: '0.625rem',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '0.875rem',
+                      backgroundColor: 'white',
+                    }}
+                  >
+                    <option value="">👤 Todas as Pessoas</option>
+                    {users.map(user => (
+                      <option key={user.id} value={user.id}>
+                        {user.nome}
+                      </option>
+                    ))}
+                  </select>
+
+                  <select
+                    value={filterObra}
+                    onChange={(e) => setFilterObra(e.target.value)}
+                    style={{
+                      padding: '0.625rem',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '0.875rem',
+                      backgroundColor: 'white',
+                    }}
+                  >
+                    <option value="">🏗️ Todas as Obras</option>
+                    {obras.map(obra => (
+                      <option key={obra.id} value={obra.id}>
+                        {obra.nome}
+                      </option>
+                    ))}
+                  </select>
+
+                  <select
+                    value={filterLocalizacao}
+                    onChange={(e) => setFilterLocalizacao(e.target.value)}
+                    style={{
+                      padding: '0.625rem',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '0.875rem',
+                      backgroundColor: 'white',
+                    }}
+                  >
+                    <option value="">📍 Todas Localizações</option>
+                    <option value="estoque">🏪 Estoque/Almoxarifado</option>
+                    <option value="funcionario">👷 Com Funcionário</option>
+                  </select>
+                </div>
+
+                {/* Botão Limpar Filtros */}
+                {(searchTerm || filterFuncionario || filterObra || filterLocalizacao || filterOrigem) && (
+                  <button
+                    onClick={clearFilters}
+                    style={{
+                      padding: '0.5rem 1rem',
+                      backgroundColor: '#ef4444',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '0.875rem',
+                      fontWeight: '500',
+                      width: '100%',
+                    }}
+                  >
+                    🗑️ Limpar Filtros
+                  </button>
+                )}
+              </div>
+
+              {filteredItems.length === 0 ? (
                 <div style={{
                   padding: '2rem',
                   textAlign: 'center',
@@ -230,11 +434,15 @@ export default function Transfers() {
                   backgroundColor: '#f9fafb',
                   borderRadius: '6px',
                 }}>
-                  <p>Você não possui itens disponíveis para transferência</p>
+                  {availableItems.length === 0 ? (
+                    <p>Você não possui itens disponíveis para transferência</p>
+                  ) : (
+                    <p>Nenhum item encontrado com os filtros aplicados</p>
+                  )}
                 </div>
               ) : (
                 <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
-                  {availableItems.map(item => (
+                  {filteredItems.map(item => (
                     <div
                       key={item.id}
                       onClick={() => handleItemToggle(item.id)}
@@ -261,7 +469,7 @@ export default function Transfers() {
                               {item.nome}
                             </div>
                             <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>
-                              Código: {item.codigo} | Qtd: {item.quantidade}
+                              Lacre: {item.lacre} | Qtd: {item.quantidade}
                             </div>
                             <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>
                               {getItemLocation(item)}

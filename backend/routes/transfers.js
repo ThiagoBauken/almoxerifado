@@ -121,10 +121,11 @@ router.post(
       const item = itemCheck.rows[0];
 
       // Verificar se item pode ser transferido
-      if (
-        item.estado !== 'disponivel_estoque' &&
-        item.estado !== 'com_funcionario'
-      ) {
+      // Permitir: disponivel, disponivel_estoque, com_funcionario
+      // Bloquear: em_manutencao, perdido, pendente_aceitacao, em_transito, etc.
+      const estadosPermitidos = ['disponivel', 'disponivel_estoque', 'com_funcionario'];
+
+      if (!estadosPermitidos.includes(item.estado)) {
         await client.query('ROLLBACK');
         return res.status(400).json({
           success: false,

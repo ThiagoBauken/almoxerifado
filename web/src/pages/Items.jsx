@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import api from '../services/api';
 import Layout from '../components/Layout';
 import ImportModal from '../components/ImportModal';
-import QRCode from 'qrcode';
 
 export default function Items() {
   const [items, setItems] = useState([]);
@@ -11,9 +10,7 @@ export default function Items() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
-  const [showQRModal, setShowQRModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
-  const [selectedItemForQR, setSelectedItemForQR] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState({
     categoria_id: '',
@@ -22,7 +19,6 @@ export default function Items() {
     lowStockOnly: false,
   });
   const [showFilters, setShowFilters] = useState(false);
-  const qrCanvasRef = useRef(null);
   const [formData, setFormData] = useState({
     nome: '',
     codigo: '',
@@ -141,47 +137,6 @@ export default function Items() {
     } catch (error) {
       console.error('Erro ao excluir item:', error);
       alert('Erro ao excluir item');
-    }
-  };
-
-  const handleShowQRCode = async (item) => {
-    setSelectedItemForQR(item);
-    setShowQRModal(true);
-
-    // Generate QR Code after modal opens
-    setTimeout(async () => {
-      if (qrCanvasRef.current) {
-        try {
-          const qrData = JSON.stringify({
-            id: item.id,
-            codigo: item.codigo,
-            nome: item.nome,
-            categoria: item.categoria_nome,
-          });
-
-          await QRCode.toCanvas(qrCanvasRef.current, qrData, {
-            width: 300,
-            margin: 2,
-            color: {
-              dark: '#000000',
-              light: '#FFFFFF',
-            },
-          });
-        } catch (error) {
-          console.error('Erro ao gerar QR Code:', error);
-          alert('Erro ao gerar QR Code');
-        }
-      }
-    }, 100);
-  };
-
-  const handleDownloadQRCode = () => {
-    if (qrCanvasRef.current && selectedItemForQR) {
-      const url = qrCanvasRef.current.toDataURL('image/png');
-      const link = document.createElement('a');
-      link.download = `qrcode-${selectedItemForQR.codigo}.png`;
-      link.href = url;
-      link.click();
     }
   };
 
@@ -523,21 +478,6 @@ export default function Items() {
                     </td>
                     <td style={{ padding: '0.75rem' }}>
                       <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        <button
-                          onClick={() => handleShowQRCode(item)}
-                          style={{
-                            padding: '0.25rem 0.75rem',
-                            backgroundColor: '#8b5cf6',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '0.75rem',
-                          }}
-                          title="Gerar QR Code"
-                        >
-                          QR
-                        </button>
                         <button
                           onClick={() => handleEdit(item)}
                           style={{
@@ -941,93 +881,6 @@ export default function Items() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* QR Code Modal */}
-      {showQRModal && selectedItemForQR && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000,
-        }}>
-          <div style={{
-            backgroundColor: 'white',
-            borderRadius: '8px',
-            padding: '2rem',
-            width: '90%',
-            maxWidth: '400px',
-            textAlign: 'center',
-          }}>
-            <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1rem', color: '#1f2937' }}>
-              QR Code do Item
-            </h2>
-
-            <div style={{ marginBottom: '1rem', textAlign: 'left', padding: '1rem', backgroundColor: '#f9fafb', borderRadius: '6px' }}>
-              <div style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '0.5rem' }}>
-                <strong>Nome:</strong> {selectedItemForQR.nome}
-              </div>
-              <div style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '0.5rem' }}>
-                <strong>Código:</strong> {selectedItemForQR.codigo}
-              </div>
-              <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>
-                <strong>Categoria:</strong> {selectedItemForQR.categoria_nome || 'N/A'}
-              </div>
-            </div>
-
-            <div style={{
-              display: 'flex',
-              justifyContent: 'center',
-              marginBottom: '1.5rem',
-              padding: '1rem',
-              backgroundColor: '#f9fafb',
-              borderRadius: '6px',
-            }}>
-              <canvas ref={qrCanvasRef} style={{ maxWidth: '100%' }} />
-            </div>
-
-            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-              <button
-                onClick={handleDownloadQRCode}
-                style={{
-                  padding: '0.75rem 1.5rem',
-                  backgroundColor: '#10b981',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '0.875rem',
-                  fontWeight: '500',
-                }}
-              >
-                Baixar QR Code
-              </button>
-              <button
-                onClick={() => {
-                  setShowQRModal(false);
-                  setSelectedItemForQR(null);
-                }}
-                style={{
-                  padding: '0.75rem 1.5rem',
-                  backgroundColor: '#6b7280',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '0.875rem',
-                }}
-              >
-                Fechar
-              </button>
-            </div>
           </div>
         </div>
       )}

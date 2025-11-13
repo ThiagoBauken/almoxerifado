@@ -9,6 +9,7 @@ import Categories from './pages/Categories';
 import Storage from './pages/Storage';
 import Obras from './pages/Obras';
 import Transfers from './pages/Transfers';
+import Scanner from './pages/Scanner';
 import History from './pages/History';
 import Users from './pages/Users';
 import Settings from './pages/Settings';
@@ -85,6 +86,7 @@ function App() {
           <Route path="/storage" element={<PrivateRoute><Storage /></PrivateRoute>} />
           <Route path="/obras" element={<PrivateRoute><Obras /></PrivateRoute>} />
           <Route path="/transfers" element={<PrivateRoute><Transfers /></PrivateRoute>} />
+          <Route path="/scanner" element={<PrivateRoute><Scanner /></PrivateRoute>} />
           <Route path="/notifications" element={<PrivateRoute><Notifications /></PrivateRoute>} />
           <Route path="/history" element={<PrivateRoute><History /></PrivateRoute>} />
           <Route path="/users" element={<PrivateRoute><Users /></PrivateRoute>} />
