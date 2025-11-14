@@ -225,18 +225,14 @@ export default function Transfers() {
   const availableItems = items.filter(item => {
     if (!currentUser) return false;
 
-    // Itens com o usuário atual
-    const withCurrentUser = item.funcionario_id === currentUser.id;
+    // ADMINS/GESTORES/ALMOXARIFES podem ver e transferir QUALQUER item
+    const isAdmin = ['almoxarife', 'gestor', 'admin'].includes(currentUser.perfil);
+    if (isAdmin) {
+      return true; // Vê todos os itens
+    }
 
-    // Itens disponíveis no estoque (podem ser transferidos por almoxarifes/gestores/admin)
-    const inStock =
-      item.estado === 'disponivel' ||
-      item.estado === 'disponivel_estoque' ||
-      item.localizacao_tipo === 'almoxarifado' ||
-      item.localizacao_tipo === 'estoque';
-    const canTransferFromStock = ['almoxarife', 'gestor', 'admin'].includes(currentUser.perfil);
-
-    return withCurrentUser || (inStock && canTransferFromStock);
+    // Funcionários normais só veem seus próprios itens
+    return item.funcionario_id === currentUser.id;
   });
 
   // Aplicar filtros de busca e seleção
@@ -250,7 +246,7 @@ export default function Transfers() {
       if (!matchesSearch) return false;
     }
 
-    // Filtro por ORIGEM (meus itens vs estoque) - para almoxarifes/gestores
+    // Filtro por ORIGEM (meus itens vs estoque vs outros funcionários) - para almoxarifes/gestores
     if (filterOrigem && currentUser) {
       if (filterOrigem === 'meus_itens') {
         // Mostrar apenas itens que estão COM O USUÁRIO ATUAL
@@ -263,6 +259,10 @@ export default function Transfers() {
           item.localizacao_tipo === 'almoxarifado' ||
           item.localizacao_tipo === 'estoque';
         if (!isInStock) return false;
+      } else if (filterOrigem === 'outros_funcionarios') {
+        // Mostrar apenas itens que estão COM OUTROS FUNCIONÁRIOS (não o usuário atual e não no estoque)
+        const isWithOthers = item.funcionario_id && item.funcionario_id !== currentUser.id;
+        if (!isWithOthers) return false;
       }
     }
 
@@ -394,6 +394,7 @@ export default function Transfers() {
                       <option value="">📦 Todos os Itens</option>
                       <option value="meus_itens">👤 Meus Itens Pessoais</option>
                       <option value="estoque">🏪 Itens do Estoque</option>
+                      <option value="outros_funcionarios">👥 Itens de Outros Funcionários</option>
                     </select>
                   </div>
                 )}

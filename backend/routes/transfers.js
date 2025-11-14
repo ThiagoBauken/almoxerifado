@@ -227,14 +227,25 @@ router.post(
         });
       }
 
+      // Verificar se é ADMIN transferindo item de OUTRO funcionário
+      const isAdminTransfer =
+        ['admin', 'gestor', 'almoxarife'].includes(req.user.perfil) &&
+        item.funcionario_id &&
+        item.funcionario_id !== req.user.id;
+
+      // Status inicial: automático para admins, pendente para funcionários
+      const initialStatus = isAdminTransfer ? 'concluida' : 'pendente';
+
       // Criar transferência
       const transferResult = await client.query(
         `INSERT INTO transfers (
           item_id, tipo, de_usuario_id, para_usuario_id,
           de_localizacao, para_localizacao, status,
-          assinatura_remetente, foto_comprovante, motivo, observacoes
+          assinatura_remetente, assinatura_destinatario,
+          foto_comprovante, motivo, observacoes,
+          data_aceitacao
         )
-        VALUES ($1, $2, $3, $4, $5, $6, 'pendente', $7, $8, $9, $10)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         RETURNING *`,
         [
           item_id,
@@ -243,43 +254,94 @@ router.post(
           para_usuario_id,
           de_localizacao,
           para_localizacao,
+          initialStatus,
           assinatura_remetente,
+          isAdminTransfer ? `Transferência automática por ${req.user.nome} (Admin)` : null,
           foto_comprovante,
           motivo,
-          observacoes,
+          isAdminTransfer
+            ? `Transferência administrativa - Item retirado de ${item.funcionario_nome || 'funcionário'}. ${observacoes || ''}`
+            : observacoes,
+          isAdminTransfer ? new Date() : null,
         ]
       );
 
       const transfer = transferResult.rows[0];
 
-      // Atualizar estado do item para "pendente_aceitacao"
-      await client.query(
-        `UPDATE items
-         SET estado = 'pendente_aceitacao',
-             localizacao_tipo = 'em_transito',
-             updated_at = NOW()
-         WHERE id = $1`,
-        [item_id]
-      );
+      if (isAdminTransfer) {
+        // ADMIN TRANSFERINDO - Automático, item vai direto para o destinatário
+        await client.query(
+          `UPDATE items
+           SET estado = 'com_funcionario',
+               funcionario_id = $1,
+               localizacao_tipo = 'funcionario',
+               updated_at = NOW()
+           WHERE id = $2`,
+          [para_usuario_id, item_id]
+        );
 
-      // Criar notificação para o destinatário
-      await createNotification(client, {
-        user_id: para_usuario_id,
-        tipo: 'transfer_received',
-        titulo: 'Nova Transferência Recebida',
-        mensagem: `Você recebeu uma transferência do item ${item.nome}. Acesse para aceitar ou rejeitar.`,
-        reference_type: 'transfer',
-        reference_id: transfer.id,
-        link: `/notifications`,
-      });
+        // Notificar o funcionário que teve o item retirado
+        if (item.funcionario_id) {
+          await createNotification(client, {
+            user_id: item.funcionario_id,
+            tipo: 'admin_transfer',
+            titulo: 'Item Transferido por Administrador',
+            mensagem: `O item ${item.nome} foi transferido administrativamente por ${req.user.nome}.`,
+            reference_type: 'transfer',
+            reference_id: transfer.id,
+            link: `/notifications`,
+          });
+        }
 
-      await client.query('COMMIT');
+        // Notificar o destinatário
+        await createNotification(client, {
+          user_id: para_usuario_id,
+          tipo: 'transfer_received',
+          titulo: 'Item Transferido para Você',
+          mensagem: `${req.user.nome} transferiu o item ${item.nome} para você.`,
+          reference_type: 'transfer',
+          reference_id: transfer.id,
+          link: `/notifications`,
+        });
 
-      res.status(201).json({
-        success: true,
-        message: 'Transferência criada com sucesso',
-        data: transfer,
-      });
+        await client.query('COMMIT');
+
+        return res.status(201).json({
+          success: true,
+          message: 'Transferência administrativa realizada com sucesso',
+          data: transfer,
+        });
+      } else {
+        // TRANSFERÊNCIA NORMAL - Pendente de aprovação
+        // Atualizar estado do item para "pendente_aceitacao"
+        await client.query(
+          `UPDATE items
+           SET estado = 'pendente_aceitacao',
+               localizacao_tipo = 'em_transito',
+               updated_at = NOW()
+           WHERE id = $1`,
+          [item_id]
+        );
+
+        // Criar notificação para o destinatário
+        await createNotification(client, {
+          user_id: para_usuario_id,
+          tipo: 'transfer_received',
+          titulo: 'Nova Transferência Recebida',
+          mensagem: `Você recebeu uma transferência do item ${item.nome}. Acesse para aceitar ou rejeitar.`,
+          reference_type: 'transfer',
+          reference_id: transfer.id,
+          link: `/notifications`,
+        });
+
+        await client.query('COMMIT');
+
+        return res.status(201).json({
+          success: true,
+          message: 'Transferência criada com sucesso',
+          data: transfer,
+        });
+      }
     } catch (error) {
       await client.query('ROLLBACK');
       console.error('Erro ao criar transferência:', error);
