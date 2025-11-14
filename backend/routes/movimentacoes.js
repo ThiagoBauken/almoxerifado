@@ -5,6 +5,43 @@ const { authMiddleware } = require('./auth');
 const router = express.Router();
 router.use(authMiddleware);
 
+// ==================== HELPER: REGISTRAR MOVIMENTAÇÃO ====================
+
+/**
+ * Registra uma movimentação automaticamente
+ * @param {Object} client - Cliente PostgreSQL (dentro de transação)
+ * @param {Object} data - Dados da movimentação
+ * @param {string} data.item_id - ID do item
+ * @param {string} data.usuario_id - ID do usuário que fez a ação
+ * @param {string} data.tipo - Tipo: 'entrada', 'saida', 'transferencia', 'ajuste', 'devolucao'
+ * @param {number} data.quantidade - Quantidade movimentada
+ * @param {string} data.local_from_id - Local de origem (opcional)
+ * @param {string} data.local_to_id - Local de destino (opcional)
+ * @param {string} data.observacao - Observação (opcional)
+ */
+async function registrarMovimentacao(client, data) {
+  try {
+    const {
+      item_id,
+      usuario_id,
+      tipo,
+      quantidade = 1,
+      local_from_id = null,
+      local_to_id = null,
+      observacao = null,
+    } = data;
+
+    await client.query(
+      `INSERT INTO movimentacoes (item_id, usuario_id, tipo, quantidade, local_from_id, local_to_id, observacao)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [item_id, usuario_id, tipo, quantidade, local_from_id, local_to_id, observacao]
+    );
+  } catch (error) {
+    console.error('Erro ao registrar movimentação:', error);
+    // Não lançar erro para não quebrar a operação principal
+  }
+}
+
 // ==================== LISTAR MOVIMENTAÇÕES ====================
 
 router.get('/', async (req, res) => {
@@ -107,3 +144,4 @@ router.post('/', async (req, res) => {
 });
 
 module.exports = router;
+module.exports.registrarMovimentacao = registrarMovimentacao;

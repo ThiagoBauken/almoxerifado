@@ -2,6 +2,7 @@ const express = require('express');
 const { body, validationResult, query } = require('express-validator');
 const pool = require('../database/config');
 const { authMiddleware, requireAlmoxarife } = require('./auth');
+const { registrarMovimentacao } = require('./movimentacoes');
 
 const router = express.Router();
 
@@ -152,10 +153,15 @@ router.post(
     body('nome').notEmpty().withMessage('Nome é obrigatório'),
   ],
   async (req, res) => {
+    const client = await pool.connect();
+
     try {
+      await client.query('BEGIN');
+
       // Validação
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
+        await client.query('ROLLBACK');
         return res.status(400).json({
           success: false,
           errors: errors.array(),
@@ -194,7 +200,7 @@ router.post(
       const codigoFinal = lacre || codigo;
 
       // Verificar limites do plano
-      const orgCheck = await pool.query(
+      const orgCheck = await client.query(
         `SELECT o.max_itens, COUNT(i.id) as current_itens
          FROM organizations o
          LEFT JOIN items i ON i.organization_id = o.id
@@ -206,6 +212,7 @@ router.post(
       if (orgCheck.rows.length > 0) {
         const { max_itens, current_itens } = orgCheck.rows[0];
         if (parseInt(current_itens) >= max_itens) {
+          await client.query('ROLLBACK');
           return res.status(403).json({
             success: false,
             message: `Limite de itens atingido (${max_itens}). Faça upgrade do seu plano.`,
@@ -218,12 +225,13 @@ router.post(
 
       // Verificar se codigo já existe (se fornecido)
       if (codigoFinal) {
-        const codigoExists = await pool.query(
+        const codigoExists = await client.query(
           'SELECT id FROM items WHERE codigo = $1 OR lacre = $1',
           [codigoFinal]
         );
 
         if (codigoExists.rows.length > 0) {
+          await client.query('ROLLBACK');
           return res.status(400).json({
             success: false,
             message: 'Código já cadastrado',
@@ -234,7 +242,7 @@ router.post(
       // Helper: convert empty strings to null for UUID and numeric fields
       const toNullIfEmpty = (value) => (value === '' || value === undefined) ? null : value;
 
-      const result = await pool.query(
+      const result = await client.query(
         `INSERT INTO items (
           lacre, codigo, nome, quantidade, categoria_id, estado, localizacao_tipo,
           localizacao_id, funcionario_id, obra_id, foto, qr_code,
@@ -273,17 +281,35 @@ router.post(
         ]
       );
 
+      const item = result.rows[0];
+
+      // Registrar movimentação de entrada
+      await registrarMovimentacao(client, {
+        item_id: item.id,
+        usuario_id: req.user.id,
+        tipo: 'entrada',
+        quantidade: item.quantidade || 1,
+        local_from_id: null,
+        local_to_id: toNullIfEmpty(local_armazenamento_id),
+        observacao: `Item criado - ${item.nome}`,
+      });
+
+      await client.query('COMMIT');
+
       res.status(201).json({
         success: true,
         message: 'Item criado com sucesso',
-        data: result.rows[0],
+        data: item,
       });
     } catch (error) {
+      await client.query('ROLLBACK');
       console.error('Erro ao criar item:', error);
       res.status(500).json({
         success: false,
         message: 'Erro ao criar item',
       });
+    } finally {
+      client.release();
     }
   }
 );
@@ -291,9 +317,29 @@ router.post(
 // ==================== ATUALIZAR ITEM ====================
 
 router.put('/:id', requireAlmoxarife, async (req, res) => {
+  const client = await pool.connect();
+
   try {
+    await client.query('BEGIN');
+
     const { id } = req.params;
     const updates = req.body;
+
+    // Buscar item atual para comparar quantidade
+    const itemAtual = await client.query(
+      'SELECT * FROM items WHERE id = $1 AND organization_id = $2',
+      [id, req.user.organization_id]
+    );
+
+    if (itemAtual.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({
+        success: false,
+        message: 'Item não encontrado',
+      });
+    }
+
+    const itemAntes = itemAtual.rows[0];
 
     // Helper: convert empty strings to null for UUID and numeric fields
     const toNullIfEmpty = (value) => (value === '' || value === undefined) ? null : value;
@@ -316,7 +362,7 @@ router.put('/:id', requireAlmoxarife, async (req, res) => {
       return updates[field];
     });
 
-    const result = await pool.query(
+    const result = await client.query(
       `UPDATE items
        SET ${setClause}, updated_at = NOW()
        WHERE id = $1 AND organization_id = $${values.length + 2}
@@ -324,24 +370,38 @@ router.put('/:id', requireAlmoxarife, async (req, res) => {
       [id, ...values, req.user.organization_id]
     );
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Item não encontrado',
+    const itemDepois = result.rows[0];
+
+    // Se a quantidade foi alterada, registrar movimentação de ajuste
+    if (updates.quantidade !== undefined && itemAntes.quantidade !== itemDepois.quantidade) {
+      const diferencaQuantidade = itemDepois.quantidade - itemAntes.quantidade;
+      await registrarMovimentacao(client, {
+        item_id: id,
+        usuario_id: req.user.id,
+        tipo: 'ajuste',
+        quantidade: Math.abs(diferencaQuantidade),
+        local_from_id: toNullIfEmpty(itemAntes.local_armazenamento_id),
+        local_to_id: toNullIfEmpty(itemDepois.local_armazenamento_id),
+        observacao: `Ajuste de quantidade: ${itemAntes.quantidade} → ${itemDepois.quantidade} (${diferencaQuantidade > 0 ? '+' : ''}${diferencaQuantidade})`,
       });
     }
+
+    await client.query('COMMIT');
 
     res.json({
       success: true,
       message: 'Item atualizado com sucesso',
-      data: result.rows[0],
+      data: itemDepois,
     });
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('Erro ao atualizar item:', error);
     res.status(500).json({
       success: false,
       message: 'Erro ao atualizar item',
     });
+  } finally {
+    client.release();
   }
 });
 

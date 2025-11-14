@@ -3,6 +3,7 @@ const { body, validationResult } = require('express-validator');
 const pool = require('../database/config');
 const { authMiddleware } = require('./auth');
 const { createNotification } = require('./notifications');
+const { registrarMovimentacao } = require('./movimentacoes');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -280,6 +281,17 @@ router.post(
           [para_usuario_id, item_id]
         );
 
+        // Registrar movimentação de transferência administrativa
+        await registrarMovimentacao(client, {
+          item_id: item_id,
+          usuario_id: req.user.id,
+          tipo: 'transferencia',
+          quantidade: 1,
+          local_from_id: null,
+          local_to_id: null,
+          observacao: `Transferência administrativa - De ${item.funcionario_nome || 'funcionário'} para destinatário`,
+        });
+
         // Notificar o funcionário que teve o item retirado
         if (item.funcionario_id) {
           await createNotification(client, {
@@ -437,6 +449,17 @@ router.put('/:id/respond', async (req, res) => {
            WHERE id = $1`,
           [transfer.item_id]
         );
+
+        // Registrar movimentação de devolução ao estoque
+        await registrarMovimentacao(client, {
+          item_id: transfer.item_id,
+          usuario_id: req.user.id,
+          tipo: 'devolucao',
+          quantidade: 1,
+          local_from_id: null,
+          local_to_id: null,
+          observacao: `Devolução ao estoque - ${observacoes || 'Sem observações'}`,
+        });
       } else {
         // Aceito - transferência normal, mover item para destinatário
         await client.query(
@@ -448,6 +471,17 @@ router.put('/:id/respond', async (req, res) => {
            WHERE id = $2`,
           [transfer.para_usuario_id, transfer.item_id]
         );
+
+        // Registrar movimentação de transferência
+        await registrarMovimentacao(client, {
+          item_id: transfer.item_id,
+          usuario_id: req.user.id,
+          tipo: 'transferencia',
+          quantidade: 1,
+          local_from_id: null,
+          local_to_id: null,
+          observacao: `Transferência aceita - ${observacoes || 'Sem observações'}`,
+        });
       }
     } else {
       // Rejeitado - voltar item para remetente
