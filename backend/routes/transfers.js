@@ -26,6 +26,18 @@ router.get('/', async (req, res) => {
     const params = [];
     let paramIndex = 1;
 
+    // Filtro por organização (sempre)
+    query += ` AND i.organization_id = $${paramIndex}`;
+    params.push(req.user.organization_id);
+    paramIndex++;
+
+    // Se NÃO for admin/gestor/almoxarife, filtrar apenas suas transferências
+    if (!['admin', 'gestor', 'almoxarife'].includes(req.user.perfil)) {
+      query += ` AND (t.de_usuario_id = $${paramIndex} OR t.para_usuario_id = $${paramIndex})`;
+      params.push(req.user.id);
+      paramIndex++;
+    }
+
     // Filtros
     if (status) {
       query += ` AND t.status = $${paramIndex}`;
@@ -487,6 +499,135 @@ router.post('/batch', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erro ao criar transferências em lote',
+    });
+  } finally {
+    client.release();
+  }
+});
+
+// ==================== CANCELAR TRANSFERÊNCIA (ADMIN) ====================
+
+router.delete('/:id', async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const { id } = req.params;
+    const { motivo } = req.body;
+
+    // Verificar se é admin/gestor/almoxarife
+    if (!['admin', 'gestor', 'almoxarife'].includes(req.user.perfil)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Apenas administradores, gestores e almoxarifes podem cancelar transferências',
+      });
+    }
+
+    await client.query('BEGIN');
+
+    // Buscar transferência
+    const transferResult = await client.query(
+      `SELECT t.*, i.nome as item_nome, i.estado, i.funcionario_id
+       FROM transfers t
+       LEFT JOIN items i ON t.item_id = i.id
+       WHERE t.id = $1 AND i.organization_id = $2`,
+      [id, req.user.organization_id]
+    );
+
+    if (transferResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({
+        success: false,
+        message: 'Transferência não encontrada',
+      });
+    }
+
+    const transfer = transferResult.rows[0];
+
+    // Não permitir cancelar transferências já concluídas ou canceladas
+    if (transfer.status === 'concluida') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        success: false,
+        message: 'Não é possível cancelar uma transferência já concluída',
+      });
+    }
+
+    if (transfer.status === 'cancelada') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        success: false,
+        message: 'Esta transferência já está cancelada',
+      });
+    }
+
+    // Atualizar status da transferência
+    await client.query(
+      `UPDATE transfers
+       SET status = 'cancelada',
+           observacoes = COALESCE(observacoes || ' | ', '') || $1,
+           updated_at = NOW()
+       WHERE id = $2`,
+      [motivo || `Cancelada por ${req.user.nome}`, id]
+    );
+
+    // Se o item está pendente ou em trânsito, devolver ao remetente
+    if (transfer.status === 'pendente' || transfer.status === 'em_andamento') {
+      // Verificar se é devolução ao estoque
+      if (transfer.tipo === 'devolucao' && transfer.para_localizacao === 'estoque') {
+        // Item continua com quem estava tentando devolver
+        await client.query(
+          `UPDATE items
+           SET estado = 'com_funcionario',
+               updated_at = NOW()
+           WHERE id = $1`,
+          [transfer.item_id]
+        );
+      } else {
+        // Transferência normal - item volta pro remetente
+        await client.query(
+          `UPDATE items
+           SET estado = 'com_funcionario',
+               funcionario_id = $1,
+               updated_at = NOW()
+           WHERE id = $2`,
+          [transfer.de_usuario_id, transfer.item_id]
+        );
+      }
+    }
+
+    // Deletar notificações relacionadas
+    await client.query(
+      `DELETE FROM notifications
+       WHERE reference_type = 'transfer'
+       AND reference_id = $1`,
+      [id]
+    );
+
+    // Notificar remetente sobre cancelamento
+    if (transfer.de_usuario_id) {
+      await createNotification(client, {
+        user_id: transfer.de_usuario_id,
+        tipo: 'transfer_cancelled',
+        titulo: 'Transferência Cancelada',
+        mensagem: `A transferência de ${transfer.item_nome} foi cancelada por ${req.user.nome}. ${motivo ? `Motivo: ${motivo}` : ''}`,
+        reference_type: 'transfer',
+        reference_id: id,
+        link: `/notifications`,
+      });
+    }
+
+    await client.query('COMMIT');
+
+    res.json({
+      success: true,
+      message: 'Transferência cancelada com sucesso',
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Erro ao cancelar transferência:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro ao cancelar transferência',
     });
   } finally {
     client.release();

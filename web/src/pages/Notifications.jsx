@@ -5,9 +5,10 @@ import Layout from '../components/Layout';
 export default function Notifications() {
   const [notifications, setNotifications] = useState([]);
   const [pendingTransfers, setPendingTransfers] = useState([]);
+  const [allTransfers, setAllTransfers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
-  const [activeTab, setActiveTab] = useState('transfers'); // 'transfers' ou 'notifications'
+  const [activeTab, setActiveTab] = useState('transfers'); // 'transfers' | 'notifications' | 'admin_transfers'
 
   useEffect(() => {
     const userStr = localStorage.getItem('user');
@@ -19,17 +20,26 @@ export default function Notifications() {
 
   const loadData = async () => {
     try {
-      const [notificationsRes, transfersRes] = await Promise.all([
+      const userStr = localStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+
+      const requests = [
         api.get('/notifications?read=false'),
         api.get('/transfers?status=pendente'),
-      ]);
+      ];
+
+      // Se for admin/gestor/almoxarife, buscar TODAS as transferências
+      if (user && ['almoxarife', 'gestor', 'admin'].includes(user.perfil)) {
+        requests.push(api.get('/transfers?limit=100'));
+      }
+
+      const responses = await Promise.all(requests);
+      const [notificationsRes, transfersRes, allTransfersRes] = responses;
 
       setNotifications(notificationsRes.data.data || []);
 
       // Filtrar transferências pendentes para o usuário atual
-      const userStr = localStorage.getItem('user');
-      if (userStr) {
-        const user = JSON.parse(userStr);
+      if (user) {
         const userTransfers = (transfersRes.data.data || []).filter(t => {
           // Transferências normais direcionadas ao usuário
           if (t.para_usuario_id === user.id && t.status === 'pendente') {
@@ -51,6 +61,11 @@ export default function Notifications() {
           return false;
         });
         setPendingTransfers(userTransfers);
+
+        // Todas as transferências (para admins)
+        if (allTransfersRes) {
+          setAllTransfers(allTransfersRes.data.data || []);
+        }
       }
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
@@ -92,6 +107,23 @@ export default function Notifications() {
     } catch (error) {
       console.error('Erro ao responder transferência:', error);
       alert(error.response?.data?.message || 'Erro ao responder transferência');
+    }
+  };
+
+  const handleCancelTransfer = async (transferId) => {
+    const motivo = prompt('Motivo do cancelamento (opcional):');
+    if (motivo === null) return; // Usuário clicou em cancelar
+
+    try {
+      await api.delete(`/transfers/${transferId}`, {
+        data: { motivo }
+      });
+
+      alert('Transferência cancelada com sucesso!');
+      loadData();
+    } catch (error) {
+      console.error('Erro ao cancelar transferência:', error);
+      alert(error.response?.data?.message || 'Erro ao cancelar transferência');
     }
   };
 
@@ -176,6 +208,26 @@ export default function Notifications() {
           >
             Todas Notificações ({notifications.length})
           </button>
+
+          {/* Tab Administrar Transferências - só para admins */}
+          {currentUser && ['admin', 'gestor', 'almoxarife'].includes(currentUser.perfil) && (
+            <button
+              onClick={() => setActiveTab('admin_transfers')}
+              style={{
+                padding: '0.75rem 1.5rem',
+                backgroundColor: 'transparent',
+                color: activeTab === 'admin_transfers' ? '#2563eb' : '#6b7280',
+                border: 'none',
+                borderBottom: activeTab === 'admin_transfers' ? '2px solid #2563eb' : '2px solid transparent',
+                cursor: 'pointer',
+                fontSize: '0.875rem',
+                fontWeight: '600',
+                marginBottom: '-2px',
+              }}
+            >
+              🔧 Administrar Transferências ({allTransfers.length})
+            </button>
+          )}
         </div>
 
         {loading ? (
@@ -390,6 +442,136 @@ export default function Notifications() {
                             Marcar como lida
                           </button>
                         </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Administrar Transferências (Admin) */}
+            {activeTab === 'admin_transfers' && (
+              <div>
+                {allTransfers.length === 0 ? (
+                  <div style={{
+                    backgroundColor: 'white',
+                    borderRadius: '8px',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                    padding: '3rem',
+                    textAlign: 'center',
+                  }}>
+                    <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📋</div>
+                    <p style={{ color: '#6b7280', fontSize: '1.125rem' }}>
+                      Nenhuma transferência encontrada
+                    </p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gap: '1rem' }}>
+                    {allTransfers.map((transfer) => (
+                      <div
+                        key={transfer.id}
+                        style={{
+                          backgroundColor: 'white',
+                          borderRadius: '8px',
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                          padding: '1.5rem',
+                          border: `2px solid ${
+                            transfer.status === 'concluida' ? '#10b981' :
+                            transfer.status === 'cancelada' ? '#ef4444' :
+                            transfer.status === 'pendente' ? '#fbbf24' : '#6b7280'
+                          }`,
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '1rem' }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+                              {/* Status */}
+                              <span style={{
+                                padding: '0.25rem 0.75rem',
+                                borderRadius: '9999px',
+                                fontSize: '0.75rem',
+                                backgroundColor:
+                                  transfer.status === 'concluida' ? '#d1fae5' :
+                                  transfer.status === 'cancelada' ? '#fee2e2' :
+                                  transfer.status === 'pendente' ? '#fef3c7' : '#e5e7eb',
+                                color:
+                                  transfer.status === 'concluida' ? '#047857' :
+                                  transfer.status === 'cancelada' ? '#dc2626' :
+                                  transfer.status === 'pendente' ? '#92400e' : '#4b5563',
+                                fontWeight: '600',
+                              }}>
+                                {transfer.status === 'concluida' ? '✅ Concluída' :
+                                 transfer.status === 'cancelada' ? '❌ Cancelada' :
+                                 transfer.status === 'pendente' ? '⏳ Pendente' : transfer.status}
+                              </span>
+
+                              {/* Tipo */}
+                              <span style={{
+                                padding: '0.25rem 0.75rem',
+                                borderRadius: '9999px',
+                                fontSize: '0.75rem',
+                                backgroundColor: transfer.tipo === 'devolucao' && transfer.para_localizacao === 'estoque' ? '#dcfce7' : '#dbeafe',
+                                color: transfer.tipo === 'devolucao' && transfer.para_localizacao === 'estoque' ? '#047857' : '#1e40af',
+                                fontWeight: '600',
+                              }}>
+                                {transfer.tipo === 'devolucao' && transfer.para_localizacao === 'estoque' ? '🏪 Devolução Estoque' : transfer.tipo}
+                              </span>
+
+                              <span style={{ fontSize: '0.875rem', color: '#6b7280' }}>
+                                {formatDate(transfer.data_envio)}
+                              </span>
+                            </div>
+
+                            <h3 style={{ fontSize: '1.125rem', fontWeight: '600', color: '#1f2937', marginBottom: '0.5rem' }}>
+                              {transfer.item_nome} {transfer.item_lacre && `(${transfer.item_lacre})`}
+                            </h3>
+
+                            <div style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '0.5rem' }}>
+                              <strong>De:</strong> {transfer.de_usuario_nome || 'N/A'}
+                              {' → '}
+                              <strong>Para:</strong> {
+                                transfer.tipo === 'devolucao' && transfer.para_localizacao === 'estoque'
+                                  ? 'Estoque'
+                                  : transfer.para_usuario_nome || 'N/A'
+                              }
+                            </div>
+
+                            {transfer.observacoes && (
+                              <div style={{
+                                padding: '0.75rem',
+                                backgroundColor: '#f9fafb',
+                                borderRadius: '6px',
+                                marginTop: '0.75rem',
+                                fontSize: '0.875rem',
+                                color: '#6b7280',
+                              }}>
+                                <strong>Obs:</strong> {transfer.observacoes}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Botões de ação - só para pendentes */}
+                        {transfer.status === 'pendente' && (
+                          <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
+                            <button
+                              onClick={() => handleCancelTransfer(transfer.id)}
+                              style={{
+                                flex: 1,
+                                padding: '0.75rem',
+                                backgroundColor: '#ef4444',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                fontSize: '0.875rem',
+                                fontWeight: '500',
+                              }}
+                            >
+                              🗑️ Cancelar Transferência
+                            </button>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
