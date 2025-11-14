@@ -301,6 +301,7 @@ router.put('/:id', requireAlmoxarife, async (req, res) => {
     // Fields that need empty string to null conversion
     const uuidFields = ['categoria_id', 'localizacao_id', 'funcionario_id', 'obra_id', 'local_armazenamento_id'];
     const numericFields = ['valor_unitario', 'metragem', 'quantidade', 'estoque_minimo', 'quantidade_disponivel'];
+    const dateFields = ['data_aquisicao', 'data_saida', 'data_retorno'];
 
     // Construir query dinâmica
     const fields = Object.keys(updates);
@@ -308,8 +309,8 @@ router.put('/:id', requireAlmoxarife, async (req, res) => {
       .map((field, index) => `${field} = $${index + 2}`)
       .join(', ');
     const values = fields.map((field) => {
-      // Apply toNullIfEmpty for UUID and numeric fields
-      if (uuidFields.includes(field) || numericFields.includes(field)) {
+      // Apply toNullIfEmpty for UUID, numeric and date fields
+      if (uuidFields.includes(field) || numericFields.includes(field) || dateFields.includes(field)) {
         return toNullIfEmpty(updates[field]);
       }
       return updates[field];
