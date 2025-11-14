@@ -10,7 +10,9 @@
     "migrate:storage": "node database/migrate-add-storage.js",
     "seed": "node database/seed.js",
     "seed:storage": "node database/seed-storage.js",
-    "setup": "npm run migrate && npm run migrate:storage && npm run seed && npm run seed:storage"
+    "setup": "npm run migrate && npm run migrate:storage && npm run seed && npm run seed:storage",
+    "backup": "node scripts/backup.js",
+    "backup:cron": "node scripts/cron-backup.js"
   },
   "keywords": ["almoxarifado", "inventory", "api"],
   "author": "",
@@ -28,7 +30,9 @@
     "compression": "^1.7.4",
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "json2csv": "^6.0.0-alpha.2",
+    "node-cron": "^3.0.3"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
