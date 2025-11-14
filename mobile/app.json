@@ -1,0 +1,58 @@
+{
+  "expo": {
+    "name": "Almoxarifado",
+    "slug": "almoxarifado-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#2563eb"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.almoxarifado.mobile"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#2563eb"
+      },
+      "package": "com.almoxarifado.mobile",
+      "versionCode": 1,
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Permitir $(PRODUCT_NAME) acessar a câmera para escanear QR codes."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "$(PRODUCT_NAME) precisa acessar suas fotos para adicionar imagens aos itens."
+        }
+      ],
+      "expo-barcode-scanner"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "seu-project-id-aqui"
+      }
+    }
+  }
+}

@@ -5,8 +5,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // ALTERE PARA O IP DO SEU COMPUTADOR EM DESENVOLVIMENTO
 // Exemplo: http://192.168.1.100:3000/api
 const API_BASE_URL = __DEV__
-  ? 'http://localhost:3000/api' // Desenvolvimento
-  : 'https://sua-api-producao.com/api'; // Produção
+  ? 'http://localhost:3000/api' // Desenvolvimento - ALTERE para IP do seu computador
+  : 'https://private-appalmoxerifado.pbzgje.easypanel.host/api'; // Produção
 
 // Instância do Axios
 const api = axios.create({
@@ -243,6 +243,81 @@ export const syncFull = async (lastSync = null) => {
   } catch (error) {
     console.error('Erro na sincronização:', error);
     return { success: false, message: 'Erro na sincronização' };
+  }
+};
+
+// ==================== NOTIFICAÇÕES ====================
+
+export const getNotifications = async (read = null) => {
+  try {
+    const params = read !== null ? { read } : {};
+    const response = await api.get('/notifications', { params });
+    return { success: true, data: response.data.data };
+  } catch (error) {
+    console.error('Erro ao buscar notificações:', error);
+    return { success: false, message: 'Erro ao buscar notificações' };
+  }
+};
+
+export const getUnreadCount = async () => {
+  try {
+    const response = await api.get('/notifications/unread-count');
+    return { success: true, count: response.data.count || 0 };
+  } catch (error) {
+    console.error('Erro ao buscar contador:', error);
+    return { success: false, count: 0 };
+  }
+};
+
+export const markAsRead = async (notificationId) => {
+  try {
+    const response = await api.patch(`/notifications/${notificationId}/read`);
+    return { success: true, data: response.data };
+  } catch (error) {
+    console.error('Erro ao marcar como lida:', error);
+    return { success: false, message: 'Erro ao marcar como lida' };
+  }
+};
+
+export const markAllAsRead = async () => {
+  try {
+    const response = await api.post('/notifications/mark-all-read');
+    return { success: true, data: response.data };
+  } catch (error) {
+    console.error('Erro ao marcar todas como lidas:', error);
+    return { success: false, message: 'Erro ao marcar todas como lidas' };
+  }
+};
+
+export const deleteNotification = async (notificationId) => {
+  try {
+    const response = await api.delete(`/notifications/${notificationId}`);
+    return { success: true, data: response.data };
+  } catch (error) {
+    console.error('Erro ao deletar notificação:', error);
+    return { success: false, message: 'Erro ao deletar notificação' };
+  }
+};
+
+// ==================== MOVIMENTAÇÕES (HISTÓRICO) ====================
+
+export const getMovimentacoes = async (filters = {}) => {
+  try {
+    const response = await api.get('/movimentacoes', { params: filters });
+    return { success: true, data: response.data.data };
+  } catch (error) {
+    console.error('Erro ao buscar movimentações:', error);
+    return { success: false, message: 'Erro ao buscar movimentações' };
+  }
+};
+
+export const createMovimentacao = async (movimentacaoData) => {
+  try {
+    const response = await api.post('/movimentacoes', movimentacaoData);
+    return { success: true, data: response.data.data };
+  } catch (error) {
+    console.error('Erro ao criar movimentação:', error);
+    return { success: false, message: 'Erro ao criar movimentação' };
   }
 };
 
