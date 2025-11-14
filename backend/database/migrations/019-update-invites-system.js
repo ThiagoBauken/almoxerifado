@@ -37,7 +37,7 @@ async function up() {
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_invites_token_active
       ON invites(token)
-      WHERE accepted_at IS NULL AND expires_at > NOW();
+      WHERE accepted_at IS NULL;
     `);
 
     await client.query('COMMIT');
