@@ -76,15 +76,16 @@ router.get('/download/:filename', async (req, res) => {
   try {
     const { filename } = req.params;
 
-    // Validar filename (segurança)
-    if (!filename.match(/^backup-\d{4}-\d{2}-\d{2}\.sql$/)) {
+    // Validar filename (segurança) - aceita formato com e sem timestamp completo
+    if (!filename.match(/^backup-\d{4}-\d{2}-\d{2}(_\d{2}-\d{2}-\d{2}-\d{3}Z)?\.sql$/)) {
       return res.status(400).json({
         success: false,
         message: 'Nome de arquivo inválido',
       });
     }
 
-    const filePath = path.join(BACKUP_DIR, filename);
+    // Usar basename para prevenir path traversal
+    const filePath = path.join(BACKUP_DIR, path.basename(filename));
 
     // Verificar se arquivo existe
     if (!fs.existsSync(filePath)) {
@@ -117,15 +118,16 @@ router.delete('/:filename', async (req, res) => {
   try {
     const { filename } = req.params;
 
-    // Validar filename (segurança)
-    if (!filename.match(/^backup-\d{4}-\d{2}-\d{2}\.sql$/)) {
+    // Validar filename (segurança) - aceita formato com e sem timestamp completo
+    if (!filename.match(/^backup-\d{4}-\d{2}-\d{2}(_\d{2}-\d{2}-\d{2}-\d{3}Z)?\.sql$/)) {
       return res.status(400).json({
         success: false,
         message: 'Nome de arquivo inválido',
       });
     }
 
-    const filePath = path.join(BACKUP_DIR, filename);
+    // Usar basename para prevenir path traversal
+    const filePath = path.join(BACKUP_DIR, path.basename(filename));
 
     // Verificar se arquivo existe
     if (!fs.existsSync(filePath)) {
@@ -157,7 +159,15 @@ router.delete('/:filename', async (req, res) => {
 
 router.post('/clean', async (req, res) => {
   try {
-    const { daysToKeep = 30 } = req.body;
+    let daysToKeep = parseInt(req.body.daysToKeep) || 30;
+
+    // Validar daysToKeep
+    if (daysToKeep < 1 || daysToKeep > 365) {
+      return res.status(400).json({
+        success: false,
+        message: 'daysToKeep deve estar entre 1 e 365 dias',
+      });
+    }
 
     await cleanOldBackups(daysToKeep);
 

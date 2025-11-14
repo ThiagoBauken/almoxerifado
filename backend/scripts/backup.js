@@ -1,7 +1,8 @@
 require('dotenv').config();
-const { exec } = require('child_process');
+const { execFile } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
 // Diretório de backups
 const BACKUP_DIR = path.join(__dirname, '../backups');
@@ -15,7 +16,7 @@ if (!fs.existsSync(BACKUP_DIR)) {
  * Realiza backup do banco de dados PostgreSQL
  */
 async function createBackup() {
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0];
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_');
   const backupFile = path.join(BACKUP_DIR, `backup-${timestamp}.sql`);
 
   // Extrair informações do DATABASE_URL
@@ -24,23 +25,48 @@ async function createBackup() {
     throw new Error('DATABASE_URL não configurado');
   }
 
-  // Parse DATABASE_URL
-  // Formato: postgres://user:password@host:port/database
-  const urlMatch = dbUrl.match(/postgres:\/\/([^:]+):([^@]+)@([^:]+):(\d+)\/(.+)/);
-  if (!urlMatch) {
-    throw new Error('DATABASE_URL inválido');
+  // Parse DATABASE_URL usando URL nativa (suporta caracteres especiais)
+  let user, password, host, port, database;
+  try {
+    const { URL } = require('url');
+    const dbUrlParsed = new URL(dbUrl);
+    user = dbUrlParsed.username;
+    password = decodeURIComponent(dbUrlParsed.password);
+    host = dbUrlParsed.hostname;
+    port = dbUrlParsed.port || '5432';
+    database = dbUrlParsed.pathname.substring(1);
+  } catch (error) {
+    throw new Error('DATABASE_URL inválido: ' + error.message);
   }
-
-  const [, user, password, host, port, database] = urlMatch;
 
   console.log('🔄 Iniciando backup do banco de dados...');
   console.log(`📁 Arquivo: ${backupFile}`);
 
   return new Promise((resolve, reject) => {
-    // Comando pg_dump
-    const command = `PGPASSWORD="${password}" pg_dump -h ${host} -p ${port} -U ${user} -d ${database} -F p -f "${backupFile}"`;
+    // Criar arquivo .pgpass temporário para evitar expor senha
+    const pgpassFile = path.join(os.tmpdir(), `.pgpass-${Date.now()}`);
+    const pgpassContent = `${host}:${port}:${database}:${user}:${password}\n`;
 
-    exec(command, (error, stdout, stderr) => {
+    try {
+      fs.writeFileSync(pgpassFile, pgpassContent, { mode: 0o600 });
+    } catch (error) {
+      return reject(new Error('Erro ao criar arquivo de credenciais: ' + error.message));
+    }
+
+    // Usar execFile ao invés de exec para prevenir command injection
+    const args = ['-h', host, '-p', port, '-U', user, '-d', database, '-F', 'p', '-f', backupFile];
+    const options = {
+      env: { ...process.env, PGPASSFILE: pgpassFile }
+    };
+
+    execFile('pg_dump', args, options, (error, stdout, stderr) => {
+      // Deletar arquivo .pgpass após uso
+      try {
+        fs.unlinkSync(pgpassFile);
+      } catch (cleanupError) {
+        console.warn('⚠️ Erro ao deletar arquivo temporário:', cleanupError.message);
+      }
+
       if (error) {
         console.error('❌ Erro ao criar backup:', error.message);
         return reject(error);
@@ -50,7 +76,18 @@ async function createBackup() {
         console.warn('⚠️ Avisos:', stderr);
       }
 
+      // Verificar se arquivo foi criado e não está vazio
+      if (!fs.existsSync(backupFile)) {
+        return reject(new Error('Arquivo de backup não foi criado'));
+      }
+
       const stats = fs.statSync(backupFile);
+
+      if (stats.size === 0) {
+        fs.unlinkSync(backupFile);
+        return reject(new Error('Backup criado mas arquivo está vazio'));
+      }
+
       const fileSizeMB = (stats.size / (1024 * 1024)).toFixed(2);
 
       console.log('✅ Backup criado com sucesso!');
@@ -76,17 +113,20 @@ async function cleanOldBackups(daysToKeep = 30) {
 
   let deletedCount = 0;
 
-  files.forEach((file) => {
-    const filePath = path.join(BACKUP_DIR, file);
-    const stats = fs.statSync(filePath);
-    const age = now - stats.mtimeMs;
+  // Filtrar apenas arquivos .sql que começam com backup-
+  files
+    .filter(file => file.endsWith('.sql') && file.startsWith('backup-'))
+    .forEach((file) => {
+      const filePath = path.join(BACKUP_DIR, file);
+      const stats = fs.statSync(filePath);
+      const age = now - stats.mtimeMs;
 
-    if (age > maxAge) {
-      fs.unlinkSync(filePath);
-      deletedCount++;
-      console.log(`🗑️ Backup antigo removido: ${file}`);
-    }
-  });
+      if (age > maxAge) {
+        fs.unlinkSync(filePath);
+        deletedCount++;
+        console.log(`🗑️ Backup antigo removido: ${file}`);
+      }
+    });
 
   if (deletedCount > 0) {
     console.log(`✅ ${deletedCount} backup(s) antigo(s) removido(s)`);

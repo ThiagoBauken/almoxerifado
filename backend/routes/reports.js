@@ -252,7 +252,7 @@ router.get('/dashboard', async (req, res) => {
   try {
     const { data_inicio, data_fim } = req.query;
 
-    // Estatísticas gerais
+    // Estatísticas gerais (com filtros de data opcionais)
     const statsResult = await pool.query(
       `SELECT
          COUNT(*) FILTER (WHERE estado = 'disponivel_estoque') as itens_estoque,
@@ -260,31 +260,37 @@ router.get('/dashboard', async (req, res) => {
          COUNT(*) FILTER (WHERE estado = 'pendente_aceitacao') as itens_pendentes,
          COUNT(*) as total_itens
        FROM items
-       WHERE organization_id = $1`,
-      [req.user.organization_id]
+       WHERE organization_id = $1
+         AND ($2::timestamp IS NULL OR created_at >= $2)
+         AND ($3::timestamp IS NULL OR created_at <= $3)`,
+      [req.user.organization_id, data_inicio || null, data_fim || null]
     );
 
-    // Transferências por status
+    // Transferências por status (com filtros de data opcionais)
     const transfersResult = await pool.query(
       `SELECT status, COUNT(*) as count
        FROM transfers t
        LEFT JOIN items i ON t.item_id = i.id
        WHERE i.organization_id = $1
+         AND ($2::timestamp IS NULL OR t.created_at >= $2)
+         AND ($3::timestamp IS NULL OR t.created_at <= $3)
        GROUP BY status`,
-      [req.user.organization_id]
+      [req.user.organization_id, data_inicio || null, data_fim || null]
     );
 
-    // Movimentações por tipo
+    // Movimentações por tipo (com filtros de data opcionais)
     const movimentacoesResult = await pool.query(
       `SELECT m.tipo, COUNT(*) as count
        FROM movimentacoes m
        LEFT JOIN items i ON m.item_id = i.id
        WHERE i.organization_id = $1
+         AND ($2::timestamp IS NULL OR m.created_at >= $2)
+         AND ($3::timestamp IS NULL OR m.created_at <= $3)
        GROUP BY m.tipo`,
-      [req.user.organization_id]
+      [req.user.organization_id, data_inicio || null, data_fim || null]
     );
 
-    // Itens por categoria
+    // Itens por categoria (não aplica filtro de data pois é estoque atual)
     const categoriesResult = await pool.query(
       `SELECT c.nome, COUNT(i.id) as count
        FROM categories c
