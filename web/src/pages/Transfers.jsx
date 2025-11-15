@@ -28,7 +28,6 @@ export default function Transfers() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterFuncionario, setFilterFuncionario] = useState('');
   const [filterObra, setFilterObra] = useState('');
-  const [filterLocalizacao, setFilterLocalizacao] = useState('');
   const [filterOrigem, setFilterOrigem] = useState(''); // meus_itens | estoque | todos
 
   useEffect(() => {
@@ -276,21 +275,6 @@ export default function Transfers() {
       return false;
     }
 
-    // Filtro por localização/tipo
-    if (filterLocalizacao) {
-      if (filterLocalizacao === 'estoque') {
-        // Itens no estoque/almoxarifado
-        const isInStock =
-          item.localizacao_tipo === 'almoxarifado' ||
-          item.localizacao_tipo === 'estoque' ||
-          item.estado === 'disponivel_estoque';
-        if (!isInStock) return false;
-      } else if (filterLocalizacao === 'funcionario') {
-        // Itens com funcionários
-        if (!item.funcionario_id) return false;
-      }
-    }
-
     return true;
   });
 
@@ -298,7 +282,6 @@ export default function Transfers() {
     setSearchTerm('');
     setFilterFuncionario('');
     setFilterObra('');
-    setFilterLocalizacao('');
     setFilterOrigem('');
   };
 
@@ -400,7 +383,7 @@ export default function Transfers() {
                 )}
 
                 {/* Filtros em linha */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
                   <select
                     value={filterFuncionario}
                     onChange={(e) => setFilterFuncionario(e.target.value)}
@@ -438,26 +421,10 @@ export default function Transfers() {
                       </option>
                     ))}
                   </select>
-
-                  <select
-                    value={filterLocalizacao}
-                    onChange={(e) => setFilterLocalizacao(e.target.value)}
-                    style={{
-                      padding: '0.625rem',
-                      border: '1px solid #d1d5db',
-                      borderRadius: '6px',
-                      fontSize: '0.875rem',
-                      backgroundColor: 'white',
-                    }}
-                  >
-                    <option value="">📍 Todas Localizações</option>
-                    <option value="estoque">🏪 Estoque/Almoxarifado</option>
-                    <option value="funcionario">👷 Com Funcionário</option>
-                  </select>
                 </div>
 
                 {/* Botão Limpar Filtros */}
-                {(searchTerm || filterFuncionario || filterObra || filterLocalizacao || filterOrigem) && (
+                {(searchTerm || filterFuncionario || filterObra || filterOrigem) && (
                   <button
                     onClick={clearFilters}
                     style={{
