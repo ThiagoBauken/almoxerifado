@@ -638,7 +638,7 @@ export default function Transfers() {
                       <option value="">Selecione o destinatário...</option>
                       {users.map(user => (
                         <option key={user.id} value={user.id}>
-                          {user.nome} ({user.perfil}){user.id === currentUser?.id ? ' (Você)' : ''}
+                          {user.id === currentUser?.id ? 'Você - ' : ''}{user.nome} ({user.perfil})
                         </option>
                       ))}
                     </select>
