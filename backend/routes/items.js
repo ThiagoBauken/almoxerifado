@@ -61,7 +61,7 @@ router.get('/', async (req, res) => {
     }
 
     if (search) {
-      query += ` AND (i.nome ILIKE $${paramIndex} OR i.lacre ILIKE $${paramIndex})`;
+      query += ` AND (i.nome ILIKE $${paramIndex} OR i.lacre ILIKE $${paramIndex} OR i.codigo ILIKE $${paramIndex})`;
       params.push(`%${search}%`);
       paramIndex++;
     }
@@ -196,9 +196,6 @@ router.post(
         observacao,
       } = req.body;
 
-      // Usar codigo se lacre não fornecido (compatibilidade)
-      const codigoFinal = lacre || codigo;
-
       // Verificar limites do plano
       const orgCheck = await client.query(
         `SELECT o.max_itens, COUNT(i.id) as current_itens
@@ -224,10 +221,10 @@ router.post(
       }
 
       // Verificar se codigo já existe (se fornecido)
-      if (codigoFinal) {
+      if (codigo) {
         const codigoExists = await client.query(
-          'SELECT id FROM items WHERE codigo = $1 OR lacre = $1',
-          [codigoFinal]
+          'SELECT id FROM items WHERE codigo = $1 AND organization_id = $2',
+          [codigo, req.user.organization_id]
         );
 
         if (codigoExists.rows.length > 0) {
@@ -237,6 +234,28 @@ router.post(
             message: 'Código já cadastrado',
           });
         }
+      }
+
+      // Verificar se lacre já existe para a mesma categoria (se fornecido)
+      if (lacre && categoria_id) {
+        const lacreExists = await client.query(
+          'SELECT id FROM items WHERE lacre = $1 AND categoria_id = $2 AND organization_id = $3',
+          [lacre, categoria_id, req.user.organization_id]
+        );
+
+        if (lacreExists.rows.length > 0) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({
+            success: false,
+            message: 'Lacre já cadastrado para esta categoria',
+          });
+        }
+      }
+
+      // Se item tem lacre, quantidade deve ser 1 (item individual/único)
+      let quantidadeFinal = quantidade || 0;
+      if (lacre) {
+        quantidadeFinal = 1;
       }
 
       // Helper: convert empty strings to null for UUID and numeric fields
@@ -253,10 +272,10 @@ router.post(
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
         RETURNING *`,
         [
-          codigoFinal,
-          codigoFinal,
+          lacre || null,
+          codigo || null,
           nome,
-          quantidade || 0,
+          quantidadeFinal,
           toNullIfEmpty(categoria_id),
           estado || 'disponivel',
           localizacao_tipo,
@@ -273,7 +292,7 @@ router.post(
           toNullIfEmpty(metragem),
           unidade || 'UN',
           estoque_minimo || 0,
-          quantidade_disponivel || quantidade || 0,
+          quantidade_disponivel || quantidadeFinal,
           toNullIfEmpty(data_saida),
           toNullIfEmpty(data_retorno),
           observacao,
@@ -428,6 +447,19 @@ router.delete('/:id', requireAlmoxarife, async (req, res) => {
         message: 'Item não encontrado',
       });
     }
+
+    const item = itemCheck.rows[0];
+
+    // Registrar movimentação de exclusão ANTES de deletar o item
+    await registrarMovimentacao(client, {
+      item_id: id,
+      usuario_id: req.user.id,
+      tipo: 'exclusao',
+      quantidade: 1,
+      local_from_id: null,
+      local_to_id: null,
+      observacao: `Item "${item.nome}" (${item.lacre || 'sem lacre'}) excluído por ${req.user.nome}`,
+    });
 
     // Deletar item - transferências relacionadas terão item_id = NULL automaticamente
     // graças ao ON DELETE SET NULL na foreign key (migration 022)

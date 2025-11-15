@@ -22,6 +22,7 @@ export default function Items() {
   const [formData, setFormData] = useState({
     nome: '',
     codigo: '',
+    lacre: '',
     quantidade: 0,
     categoria_id: '',
     local_armazenamento_id: '',
@@ -86,6 +87,7 @@ export default function Items() {
       setFormData({
         nome: '',
         codigo: '',
+        lacre: '',
         quantidade: 0,
         categoria_id: '',
         local_armazenamento_id: '',
@@ -111,7 +113,8 @@ export default function Items() {
     setEditingItem(item);
     setFormData({
       nome: item.nome,
-      codigo: item.codigo,
+      codigo: item.codigo || '',
+      lacre: item.lacre || '',
       quantidade: item.quantidade,
       categoria_id: item.categoria_id || '',
       local_armazenamento_id: item.local_armazenamento_id || '',
@@ -191,6 +194,7 @@ export default function Items() {
                 setFormData({
                   nome: '',
                   codigo: '',
+                  lacre: '',
                   quantidade: 0,
                   categoria_id: '',
                   local_armazenamento_id: '',
@@ -227,7 +231,7 @@ export default function Items() {
         <div style={{ marginBottom: '1rem' }}>
           <input
             type="text"
-            placeholder="Buscar por nome ou código..."
+            placeholder="Buscar por nome, código ou lacre..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{
@@ -428,7 +432,10 @@ export default function Items() {
                     Nome
                   </th>
                   <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: '#6b7280' }}>
-                    Código
+                    Código Interno
+                  </th>
+                  <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: '#6b7280' }}>
+                    Lacre/N° Série
                   </th>
                   <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: '#6b7280' }}>
                     Quantidade
@@ -450,11 +457,14 @@ export default function Items() {
               <tbody>
                 {filteredItems.map((item) => (
                   <tr key={item.id} style={{ borderTop: '1px solid #e5e7eb' }}>
-                    <td style={{ padding: '0.75rem', fontSize: '0.875rem', color: '#1f2937' }}>
+                    <td style={{ padding: '0.75rem', fontSize: '0.875rem', color: '#1f2937', fontWeight: '500' }}>
                       {item.nome}
                     </td>
                     <td style={{ padding: '0.75rem', fontSize: '0.875rem', color: '#6b7280' }}>
-                      {item.codigo}
+                      {item.codigo || '-'}
+                    </td>
+                    <td style={{ padding: '0.75rem', fontSize: '0.875rem', color: item.lacre ? '#2563eb' : '#9ca3af', fontWeight: item.lacre ? '600' : 'normal' }}>
+                      {item.lacre || '-'}
                     </td>
                     <td style={{ padding: '0.75rem', fontSize: '0.875rem', color: item.quantidade < 10 ? '#ef4444' : '#10b981' }}>
                       {item.quantidade}
@@ -596,12 +606,13 @@ export default function Items() {
 
               <div style={{ marginBottom: '1rem' }}>
                 <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
-                  Código
+                  Código Interno (opcional)
                 </label>
                 <input
                   type="text"
                   value={formData.codigo}
                   onChange={(e) => setFormData({ ...formData, codigo: e.target.value })}
+                  placeholder="Ex: CABO-001, FIO-123"
                   style={{
                     width: '100%',
                     padding: '0.5rem',
@@ -610,6 +621,39 @@ export default function Items() {
                     fontSize: '0.875rem',
                   }}
                 />
+                <small style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem', display: 'block' }}>
+                  Use para identificar tipos/grupos de itens em estoque
+                </small>
+              </div>
+
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
+                  Lacre / Número de Série (opcional)
+                </label>
+                <input
+                  type="text"
+                  value={formData.lacre}
+                  onChange={(e) => {
+                    const newLacre = e.target.value;
+                    setFormData({
+                      ...formData,
+                      lacre: newLacre,
+                      // Se adicionar lacre, força quantidade = 1
+                      quantidade: newLacre ? 1 : formData.quantidade
+                    });
+                  }}
+                  placeholder="Ex: LAC-001, NS-456789"
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '6px',
+                    fontSize: '0.875rem',
+                  }}
+                />
+                <small style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem', display: 'block' }}>
+                  Use para identificar itens individuais/únicos (deve ser único por categoria)
+                </small>
               </div>
 
               <div style={{ marginBottom: '1rem' }}>
@@ -622,14 +666,22 @@ export default function Items() {
                   min="0"
                   value={formData.quantidade}
                   onChange={(e) => setFormData({ ...formData, quantidade: parseInt(e.target.value) })}
+                  disabled={!!formData.lacre}
                   style={{
                     width: '100%',
                     padding: '0.5rem',
                     border: '1px solid #d1d5db',
                     borderRadius: '6px',
                     fontSize: '0.875rem',
+                    backgroundColor: formData.lacre ? '#f3f4f6' : 'white',
+                    cursor: formData.lacre ? 'not-allowed' : 'text',
                   }}
                 />
+                {formData.lacre && (
+                  <small style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem', display: 'block' }}>
+                    Itens com lacre são considerados individuais (quantidade = 1)
+                  </small>
+                )}
               </div>
 
               <div style={{ marginBottom: '1rem' }}>
