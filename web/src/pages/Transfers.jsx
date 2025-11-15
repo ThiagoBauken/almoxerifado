@@ -636,13 +636,11 @@ export default function Transfers() {
                       }}
                     >
                       <option value="">Selecione o destinatário...</option>
-                      {users
-                        .filter(u => currentUser && u.id !== currentUser.id)
-                        .map(user => (
-                          <option key={user.id} value={user.id}>
-                            {user.nome} ({user.perfil})
-                          </option>
-                        ))}
+                      {users.map(user => (
+                        <option key={user.id} value={user.id}>
+                          {user.nome} ({user.perfil}){user.id === currentUser?.id ? ' (Você)' : ''}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 )}
