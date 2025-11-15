@@ -46,20 +46,33 @@ async function registrarMovimentacao(client, data) {
 
 router.get('/', async (req, res) => {
   try {
-    const { item_id, usuario_id, tipo, limit = 50, offset = 0 } = req.query;
+    const { item_id, usuario_id, tipo, limit = 50, offset = 0, incluir_excluidos } = req.query;
 
     let query = `
-      SELECT m.*, i.nome as item_nome, u.nome as usuario_nome,
-             lf.codigo as local_from_codigo, lt.codigo as local_to_codigo
+      SELECT m.*,
+             CASE
+               WHEN i.id IS NULL AND m.tipo = 'exclusao' THEN m.observacao
+               WHEN i.id IS NULL THEN '[EXCLUÍDO]'
+               ELSE i.nome
+             END as item_nome,
+             u.nome as usuario_nome,
+             lf.codigo as local_from_codigo,
+             lt.codigo as local_to_codigo,
+             CASE WHEN i.id IS NULL THEN true ELSE false END as item_deletado
       FROM movimentacoes m
       LEFT JOIN items i ON m.item_id = i.id
       LEFT JOIN users u ON m.usuario_id = u.id
       LEFT JOIN locais_armazenamento lf ON m.local_from_id = lf.id
       LEFT JOIN locais_armazenamento lt ON m.local_to_id = lt.id
-      WHERE i.organization_id = $1
+      WHERE (i.organization_id = $1 OR (i.id IS NULL AND m.usuario_id = u.id))
     `;
     const params = [req.user.organization_id];
     let paramIndex = 2;
+
+    // Filtrar excluídos se não solicitado explicitamente
+    if (incluir_excluidos !== 'true') {
+      query += ` AND i.id IS NOT NULL`;
+    }
 
     if (item_id) {
       query += ` AND m.item_id = $${paramIndex}`;
@@ -93,6 +106,66 @@ router.get('/', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erro ao listar movimentações',
+    });
+  }
+});
+
+// ==================== LISTAR EXCLUSÕES ====================
+
+router.get('/exclusoes', async (req, res) => {
+  try {
+    const { usuario_id, data_inicio, data_fim, search, limit = 50, offset = 0 } = req.query;
+
+    let query = `
+      SELECT m.*,
+             u.nome as usuario_nome,
+             u.email as usuario_email
+      FROM movimentacoes m
+      LEFT JOIN users u ON m.usuario_id = u.id
+      WHERE m.tipo = 'exclusao'
+        AND u.organization_id = $1
+    `;
+    const params = [req.user.organization_id];
+    let paramIndex = 2;
+
+    if (usuario_id) {
+      query += ` AND m.usuario_id = $${paramIndex}`;
+      params.push(usuario_id);
+      paramIndex++;
+    }
+
+    if (data_inicio) {
+      query += ` AND m.created_at >= $${paramIndex}`;
+      params.push(data_inicio);
+      paramIndex++;
+    }
+
+    if (data_fim) {
+      query += ` AND m.created_at <= $${paramIndex}`;
+      params.push(data_fim);
+      paramIndex++;
+    }
+
+    if (search) {
+      query += ` AND m.observacao ILIKE $${paramIndex}`;
+      params.push(`%${search}%`);
+      paramIndex++;
+    }
+
+    query += ` ORDER BY m.created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+    params.push(limit, offset);
+
+    const result = await pool.query(query, params);
+
+    res.json({
+      success: true,
+      data: result.rows,
+    });
+  } catch (error) {
+    console.error('Erro ao listar exclusões:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro ao listar exclusões',
     });
   }
 });

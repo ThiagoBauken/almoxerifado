@@ -149,6 +149,49 @@ export default function Layout({ children }) {
               )}
             </Link>
           ))}
+
+          {/* Link do Super Admin - apenas para superadmins */}
+          {user?.is_superadmin && (
+            <Link
+              to="/superadmin"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.75rem',
+                padding: '0.75rem 1rem',
+                color: 'white',
+                textDecoration: 'none',
+                backgroundColor: location.pathname === '/superadmin' ? '#374151' : 'transparent',
+                transition: 'background-color 0.2s',
+                position: 'relative',
+                borderTop: '1px solid #374151',
+                marginTop: '0.5rem',
+              }}
+              onMouseEnter={(e) => {
+                if (location.pathname !== '/superadmin') {
+                  e.currentTarget.style.backgroundColor = '#374151';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (location.pathname !== '/superadmin') {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }
+              }}
+            >
+              <span style={{ fontSize: '1.25rem' }}>🔐</span>
+              {sidebarOpen && (
+                <span style={{
+                  flex: 1,
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  fontWeight: 'bold'
+                }}>
+                  Super Admin
+                </span>
+              )}
+            </Link>
+          )}
         </nav>
 
         <div style={{ padding: '1rem', borderTop: '1px solid #374151' }}>

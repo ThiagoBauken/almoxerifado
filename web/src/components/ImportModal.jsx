@@ -31,8 +31,8 @@ export default function ImportModal({ type, onClose, onSuccess }) {
       endpoint: '/import/items',
       templateHeaders: ['nome', 'codigo', 'quantidade', 'categoria', 'local', 'estado', 'marca_modelo', 'unidade', 'estoque_minimo', 'valor_unitario'],
       example: [
-        { nome: 'Martelo', codigo: 'MART-001', quantidade: 10, categoria: 'Ferramentas', local: 'DEP-01', estado: 'disponivel', marca_modelo: 'Tramontina', unidade: 'UN', estoque_minimo: 5, valor_unitario: 45.90 },
-        { nome: 'Capacete de Segurança', codigo: 'CAP-001', quantidade: 20, categoria: 'EPIs', local: 'EST-A1', estado: 'disponivel', marca_modelo: 'Vonder', unidade: 'UN', estoque_minimo: 10, valor_unitario: 35.00 },
+        { nome: 'Martelo', codigo: 'MART-001', quantidade: 10, categoria: 'Ferramentas', local: 'DEP-01', estado: 'disponivel_estoque', marca_modelo: 'Tramontina', unidade: 'UN', estoque_minimo: 5, valor_unitario: 45.90 },
+        { nome: 'Capacete de Segurança', codigo: 'CAP-001', quantidade: 20, categoria: 'EPIs', local: 'EST-A1', estado: 'disponivel_estoque', marca_modelo: 'Vonder', unidade: 'UN', estoque_minimo: 10, valor_unitario: 35.00 },
       ],
     },
   };

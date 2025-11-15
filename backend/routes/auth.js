@@ -55,9 +55,11 @@ router.post(
       const token = jwt.sign(
         {
           id: user.id,
+          nome: user.nome,
           email: user.email,
           perfil: user.perfil,
           organization_id: user.organization_id,
+          is_superadmin: user.is_superadmin || false,
         },
         process.env.JWT_SECRET,
         { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
@@ -161,9 +163,11 @@ router.post(
       const token = jwt.sign(
         {
           id: user.id,
+          nome: user.nome,
           email: user.email,
           perfil: user.perfil,
           organization_id: user.organization_id,
+          is_superadmin: user.is_superadmin || false,
         },
         process.env.JWT_SECRET,
         { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
@@ -263,12 +267,37 @@ const requireAdmin = (req, res, next) => {
   next();
 };
 
+// Middleware: Requer super admin
+const requireSuperAdmin = async (req, res, next) => {
+  try {
+    // Buscar usuário no banco para garantir que tem is_superadmin atualizado
+    const result = await pool.query(
+      'SELECT is_superadmin FROM users WHERE id = $1 AND ativo = true',
+      [req.user.id]
+    );
+
+    if (result.rows.length === 0 || !result.rows[0].is_superadmin) {
+      return res.status(403).json({
+        success: false,
+        message: 'Acesso negado. Requer perfil: Super Administrador',
+      });
+    }
+    next();
+  } catch (error) {
+    console.error('Erro ao verificar super admin:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao verificar permissões',
+    });
+  }
+};
+
 // ==================== VERIFICAR TOKEN ====================
 
 router.get('/verify', authMiddleware, async (req, res) => {
   try {
     const result = await pool.query(
-      'SELECT id, nome, email, perfil, obra_id, foto FROM users WHERE id = $1 AND ativo = true',
+      'SELECT id, nome, email, perfil, obra_id, foto, is_superadmin, organization_id FROM users WHERE id = $1 AND ativo = true',
       [req.user.id]
     );
 
@@ -297,3 +326,4 @@ module.exports.authMiddleware = authMiddleware;
 module.exports.requireAlmoxarife = requireAlmoxarife;
 module.exports.requireGestor = requireGestor;
 module.exports.requireAdmin = requireAdmin;
+module.exports.requireSuperAdmin = requireSuperAdmin;

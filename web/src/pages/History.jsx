@@ -330,8 +330,22 @@ export default function History() {
                             {getTipoLabel(mov.tipo)}
                           </span>
                         </td>
-                        <td style={{ padding: '0.75rem', fontSize: '0.875rem', color: '#6b7280' }}>
+                        <td style={{
+                          padding: '0.75rem',
+                          fontSize: '0.875rem',
+                          color: mov.item_deletado ? '#dc2626' : '#6b7280',
+                          fontStyle: mov.item_deletado ? 'italic' : 'normal'
+                        }}>
                           {mov.item_nome || 'N/A'}
+                          {mov.item_deletado && (
+                            <span style={{
+                              marginLeft: '0.5rem',
+                              fontSize: '0.75rem',
+                              color: '#dc2626'
+                            }}>
+                              🗑️
+                            </span>
+                          )}
                         </td>
                         <td style={{ padding: '0.75rem', fontSize: '0.875rem', color: '#6b7280', fontWeight: '600' }}>
                           {mov.quantidade}

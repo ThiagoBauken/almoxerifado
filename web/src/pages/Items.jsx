@@ -26,7 +26,7 @@ export default function Items() {
     quantidade: 0,
     categoria_id: '',
     local_armazenamento_id: '',
-    estado: 'disponivel',
+    estado: 'disponivel_estoque',
     marca_modelo: '',
     metragem: '',
     unidade: 'UN',
@@ -91,7 +91,7 @@ export default function Items() {
         quantidade: 0,
         categoria_id: '',
         local_armazenamento_id: '',
-        estado: 'disponivel',
+        estado: 'disponivel_estoque',
         marca_modelo: '',
         metragem: '',
         unidade: 'UN',
@@ -198,7 +198,7 @@ export default function Items() {
                   quantidade: 0,
                   categoria_id: '',
                   local_armazenamento_id: '',
-                  estado: 'disponivel',
+                  estado: 'disponivel_estoque',
                   marca_modelo: '',
                   metragem: '',
                   unidade: 'UN',
@@ -344,9 +344,10 @@ export default function Items() {
                   }}
                 >
                   <option value="">Todos os estados</option>
-                  <option value="disponivel">Disponível</option>
-                  <option value="emprestado">Emprestado</option>
-                  <option value="manutencao">Manutenção</option>
+                  <option value="disponivel_estoque">Estoque</option>
+                  <option value="com_funcionario">Com Funcionário</option>
+                  <option value="em_manutencao">Manutenção</option>
+                  <option value="pendente_aceitacao">Pendente</option>
                 </select>
               </div>
 
@@ -482,12 +483,12 @@ export default function Items() {
                           borderRadius: '9999px',
                           fontSize: '0.75rem',
                           backgroundColor:
-                            item.estado === 'disponivel' || item.estado === 'disponivel_estoque' ? '#d1fae5' :
+                            item.estado === 'disponivel_estoque' ? '#d1fae5' :
                             item.estado === 'com_funcionario' ? '#dbeafe' :
                             item.estado === 'pendente_aceitacao' || item.estado === 'em_transito' ? '#fef3c7' :
                             '#fee2e2',
                           color:
-                            item.estado === 'disponivel' || item.estado === 'disponivel_estoque' ? '#065f46' :
+                            item.estado === 'disponivel_estoque' ? '#065f46' :
                             item.estado === 'com_funcionario' ? '#1e40af' :
                             item.estado === 'pendente_aceitacao' || item.estado === 'em_transito' ? '#92400e' :
                             '#991b1b',
@@ -745,9 +746,9 @@ export default function Items() {
                     fontSize: '0.875rem',
                   }}
                 >
-                  <option value="disponivel">Disponível</option>
-                  <option value="emprestado">Emprestado</option>
-                  <option value="manutencao">Manutenção</option>
+                  <option value="disponivel_estoque">Estoque</option>
+                  <option value="com_funcionario">Com Funcionário</option>
+                  <option value="em_manutencao">Manutenção</option>
                 </select>
               </div>
 

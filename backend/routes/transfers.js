@@ -16,8 +16,14 @@ router.get('/', async (req, res) => {
 
     let query = `
       SELECT t.*,
-             i.nome as item_nome, i.lacre as item_lacre,
-             u1.nome as de_usuario_nome, u2.nome as para_usuario_nome
+             CASE
+               WHEN t.item_id IS NULL THEN '[EXCLUÍDO] ' || COALESCE(t.item_nome, 'Item sem nome')
+               ELSE COALESCE(i.nome, t.item_nome)
+             END as item_nome,
+             COALESCE(i.lacre, t.item_lacre) as item_lacre,
+             u1.nome as de_usuario_nome,
+             u2.nome as para_usuario_nome,
+             CASE WHEN t.item_id IS NULL THEN true ELSE false END as item_deletado
       FROM transfers t
       LEFT JOIN items i ON t.item_id = i.id
       LEFT JOIN users u1 ON t.de_usuario_id = u1.id
@@ -135,9 +141,9 @@ router.post(
       const item = itemCheck.rows[0];
 
       // Verificar se item pode ser transferido
-      // Permitir: disponivel, disponivel_estoque, com_funcionario
+      // Permitir: disponivel_estoque, com_funcionario
       // Bloquear: em_manutencao, perdido, pendente_aceitacao, em_transito, etc.
-      const estadosPermitidos = ['disponivel', 'disponivel_estoque', 'com_funcionario'];
+      const estadosPermitidos = ['disponivel_estoque', 'com_funcionario'];
 
       if (!estadosPermitidos.includes(item.estado)) {
         await client.query('ROLLBACK');
@@ -170,9 +176,10 @@ router.post(
           `INSERT INTO transfers (
             item_id, tipo, de_usuario_id, para_usuario_id,
             de_localizacao, para_localizacao, status,
-            assinatura_remetente, foto_comprovante, motivo, observacoes
+            assinatura_remetente, foto_comprovante, motivo, observacoes,
+            item_nome, item_lacre
           )
-          VALUES ($1, 'devolucao', $2, NULL, $3, 'estoque', 'pendente', $4, $5, $6, $7)
+          VALUES ($1, 'devolucao', $2, NULL, $3, 'estoque', 'pendente', $4, $5, $6, $7, $8, $9)
           RETURNING *`,
           [
             item_id,
@@ -182,6 +189,8 @@ router.post(
             foto_comprovante,
             motivo || 'Devolução ao estoque',
             observacoes,
+            item.nome,
+            item.lacre,
           ]
         );
 
@@ -244,16 +253,37 @@ router.post(
       // Status inicial: automático para admins, pendente para funcionários
       const initialStatus = isAdminTransfer ? 'concluida' : 'pendente';
 
-      // Criar transferência
+      // Se for admin transfer, buscar nomes para mensagens
+      let destinatarioNome = 'Destinatário';
+      let origemNome = 'Estoque';
+      if (isAdminTransfer) {
+        // Buscar nome do destinatário
+        const destinatarioResult = await client.query(
+          'SELECT nome FROM users WHERE id = $1',
+          [para_usuario_id]
+        );
+        destinatarioNome = destinatarioResult.rows[0]?.nome || 'Destinatário';
+
+        // Buscar nome do funcionário de origem (se houver)
+        if (item.funcionario_id) {
+          const origemResult = await client.query(
+            'SELECT nome FROM users WHERE id = $1',
+            [item.funcionario_id]
+          );
+          origemNome = origemResult.rows[0]?.nome || 'Funcionário';
+        }
+      }
+
+      // Criar transferência (salvar nome e lacre do item para histórico)
       const transferResult = await client.query(
         `INSERT INTO transfers (
           item_id, tipo, de_usuario_id, para_usuario_id,
           de_localizacao, para_localizacao, status,
           assinatura_remetente, assinatura_destinatario,
           foto_comprovante, motivo, observacoes,
-          data_aceitacao
+          data_aceitacao, item_nome, item_lacre
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
         RETURNING *`,
         [
           item_id,
@@ -268,15 +298,18 @@ router.post(
           foto_comprovante,
           motivo,
           isAdminTransfer
-            ? `Transferência administrativa - Item retirado de ${item.funcionario_nome || 'funcionário'}. ${observacoes || ''}`
+            ? `Executado por ${req.user.nome} - De ${origemNome} para ${destinatarioNome}. ${observacoes || ''}`
             : observacoes,
           isAdminTransfer ? new Date() : null,
+          item.nome,
+          item.lacre,
         ]
       );
 
       const transfer = transferResult.rows[0];
 
       if (isAdminTransfer) {
+
         // ADMIN TRANSFERINDO - Automático, item vai direto para o destinatário
         await client.query(
           `UPDATE items
@@ -296,8 +329,11 @@ router.post(
           quantidade: 1,
           local_from_id: null,
           local_to_id: null,
-          observacao: `Transferência administrativa - De ${item.funcionario_nome || 'funcionário'} para destinatário`,
+          observacao: `Executado por ${req.user.nome} - De ${origemNome} para ${destinatarioNome}`,
         });
+
+        // Identificador do item (lacre ou nome)
+        const itemIdentificador = item.lacre || item.nome || `#${item.id}`;
 
         // Notificar o funcionário que teve o item retirado
         if (item.funcionario_id) {
@@ -305,7 +341,7 @@ router.post(
             user_id: item.funcionario_id,
             tipo: 'admin_transfer',
             titulo: 'Item Transferido por Administrador',
-            mensagem: `O item ${item.nome} foi transferido administrativamente por ${req.user.nome}.`,
+            mensagem: `${req.user.nome} (admin) transferiu o item ${itemIdentificador} de você para ${destinatarioNome}.`,
             reference_type: 'transfer',
             reference_id: transfer.id,
             link: `/notifications`,
@@ -317,7 +353,7 @@ router.post(
           user_id: para_usuario_id,
           tipo: 'transfer_received',
           titulo: 'Item Transferido para Você',
-          mensagem: `${req.user.nome} transferiu o item ${item.nome} para você.`,
+          mensagem: `${req.user.nome} (admin) transferiu o item ${itemIdentificador} ${origemNome !== 'Estoque' ? `de ${origemNome}` : 'do estoque'} para você.`,
           reference_type: 'transfer',
           reference_id: transfer.id,
           link: `/notifications`,
@@ -551,15 +587,17 @@ router.post('/batch', async (req, res) => {
         continue; // Pular item não encontrado
       }
 
+      const item = itemCheck.rows[0];
+
       // Criar transferência
       const transferResult = await client.query(
         `INSERT INTO transfers (
           item_id, tipo, de_usuario_id, para_usuario_id,
-          status, observacoes
+          status, observacoes, item_nome, item_lacre
         )
-        VALUES ($1, 'transferencia', $2, $3, 'pendente', $4)
+        VALUES ($1, 'transferencia', $2, $3, 'pendente', $4, $5, $6)
         RETURNING *`,
-        [item_id, de_usuario_id, para_usuario_id, observacoes]
+        [item_id, de_usuario_id, para_usuario_id, observacoes, item.nome, item.lacre]
       );
 
       const transfer = transferResult.rows[0];
@@ -737,26 +775,147 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+// ==================== LISTAR ITENS EXCLUÍDOS COM HISTÓRICO ====================
+
+router.get('/deleted-items', async (req, res) => {
+  try {
+    const { search, de_usuario_id, para_usuario_id, data_inicio, data_fim, limit = 50, offset = 0 } = req.query;
+
+    let query = `
+      SELECT DISTINCT ON (t.item_lacre)
+             t.item_lacre,
+             t.item_nome,
+             MAX(t.data_envio) as ultima_transferencia,
+             COUNT(t.id) as total_transferencias,
+             u_ultimo_de.nome as ultimo_remetente,
+             u_ultimo_para.nome as ultimo_destinatario
+      FROM transfers t
+      LEFT JOIN users u_ultimo_de ON t.de_usuario_id = u_ultimo_de.id
+      LEFT JOIN users u_ultimo_para ON t.para_usuario_id = u_ultimo_para.id
+      WHERE t.item_id IS NULL
+        AND t.item_lacre IS NOT NULL
+    `;
+
+    const params = [];
+    let paramIndex = 1;
+
+    // Filtros
+    if (search) {
+      query += ` AND (t.item_nome ILIKE $${paramIndex} OR t.item_lacre ILIKE $${paramIndex})`;
+      params.push(`%${search}%`);
+      paramIndex++;
+    }
+
+    if (de_usuario_id) {
+      query += ` AND t.de_usuario_id = $${paramIndex}`;
+      params.push(de_usuario_id);
+      paramIndex++;
+    }
+
+    if (para_usuario_id) {
+      query += ` AND t.para_usuario_id = $${paramIndex}`;
+      params.push(para_usuario_id);
+      paramIndex++;
+    }
+
+    if (data_inicio) {
+      query += ` AND t.data_envio >= $${paramIndex}`;
+      params.push(data_inicio);
+      paramIndex++;
+    }
+
+    if (data_fim) {
+      query += ` AND t.data_envio <= $${paramIndex}`;
+      params.push(data_fim);
+      paramIndex++;
+    }
+
+    query += `
+      GROUP BY t.item_lacre, t.item_nome, u_ultimo_de.nome, u_ultimo_para.nome
+      ORDER BY t.item_lacre, ultima_transferencia DESC
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `;
+    params.push(limit, offset);
+
+    const result = await pool.query(query, params);
+
+    res.json({
+      success: true,
+      data: result.rows,
+    });
+  } catch (error) {
+    console.error('Erro ao listar itens excluídos:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro ao listar itens excluídos',
+    });
+  }
+});
+
 // ==================== HISTÓRICO DO ITEM ====================
 
 router.get('/item/:item_id/history', async (req, res) => {
   try {
     const { item_id } = req.params;
 
-    const result = await pool.query(
-      `SELECT t.*,
-              u1.nome as de_usuario_nome, u2.nome as para_usuario_nome
-       FROM transfers t
-       LEFT JOIN users u1 ON t.de_usuario_id = u1.id
-       LEFT JOIN users u2 ON t.para_usuario_id = u2.id
-       WHERE t.item_id = $1
-       ORDER BY t.data_envio DESC`,
+    // Buscar item (pode não existir se foi excluído)
+    const itemResult = await pool.query(
+      'SELECT nome, lacre FROM items WHERE id = $1',
       [item_id]
     );
+
+    let lacre = null;
+    if (itemResult.rows.length > 0) {
+      lacre = itemResult.rows[0].lacre;
+    }
+
+    // Se item não existe, tentar buscar histórico pelo lacre
+    // (para itens excluídos que têm transfers com item_lacre preenchido)
+    let query;
+    let params;
+
+    if (itemResult.rows.length > 0) {
+      // Item existe: buscar por item_id OU item_lacre
+      query = `
+        SELECT t.*,
+               u1.nome as de_usuario_nome,
+               u2.nome as para_usuario_nome,
+               CASE
+                 WHEN t.item_id IS NULL THEN '[EXCLUÍDO] ' || COALESCE(t.item_nome, 'Item sem nome')
+                 ELSE i.nome
+               END as item_display_nome,
+               COALESCE(t.item_lacre, i.lacre) as item_display_lacre
+        FROM transfers t
+        LEFT JOIN items i ON t.item_id = i.id
+        LEFT JOIN users u1 ON t.de_usuario_id = u1.id
+        LEFT JOIN users u2 ON t.para_usuario_id = u2.id
+        WHERE t.item_id = $1 OR (t.item_lacre = $2 AND t.item_id IS NULL)
+        ORDER BY t.data_envio DESC
+      `;
+      params = [item_id, lacre];
+    } else {
+      // Item não existe: buscar apenas por item_lacre
+      query = `
+        SELECT t.*,
+               u1.nome as de_usuario_nome,
+               u2.nome as para_usuario_nome,
+               '[EXCLUÍDO] ' || COALESCE(t.item_nome, 'Item sem nome') as item_display_nome,
+               t.item_lacre as item_display_lacre
+        FROM transfers t
+        LEFT JOIN users u1 ON t.de_usuario_id = u1.id
+        LEFT JOIN users u2 ON t.para_usuario_id = u2.id
+        WHERE t.item_id = $1
+        ORDER BY t.data_envio DESC
+      `;
+      params = [item_id];
+    }
+
+    const result = await pool.query(query, params);
 
     res.json({
       success: true,
       data: result.rows,
+      item_deleted: itemResult.rows.length === 0,
     });
   } catch (error) {
     console.error('Erro ao buscar histórico:', error);

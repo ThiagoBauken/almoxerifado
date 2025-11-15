@@ -280,7 +280,7 @@ router.post(
           nome,
           quantidadeFinal,
           toNullIfEmpty(categoria_id),
-          estado || 'disponivel',
+          estado || 'disponivel_estoque',
           localizacao_tipo,
           toNullIfEmpty(localizacao_id),
           toNullIfEmpty(funcionario_id),

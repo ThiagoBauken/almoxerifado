@@ -15,6 +15,7 @@ import Users from './pages/Users';
 import Settings from './pages/Settings';
 import AcceptInvite from './pages/AcceptInvite';
 import Notifications from './pages/Notifications';
+import SuperAdmin from './pages/SuperAdmin';
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
@@ -91,6 +92,7 @@ function App() {
           <Route path="/history" element={<PrivateRoute><History /></PrivateRoute>} />
           <Route path="/users" element={<PrivateRoute><Users /></PrivateRoute>} />
           <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
+          <Route path="/superadmin" element={<PrivateRoute><SuperAdmin /></PrivateRoute>} />
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </AuthProvider>
