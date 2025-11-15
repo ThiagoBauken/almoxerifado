@@ -500,12 +500,12 @@ export default function Items() {
                            item.estado}
                         </span>
                         {/* Mostrar detalhes adicionais */}
-                        {item.funcionario_nome && (
+                        {item.funcionario_nome && item.estado === 'com_funcionario' && (
                           <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>
                             👤 {item.funcionario_nome}
                           </span>
                         )}
-                        {(item.estado === 'disponivel_estoque' || item.localizacao_tipo === 'almoxarifado') && (
+                        {item.estado === 'disponivel_estoque' && (
                           <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>
                             🏪 Almoxarifado
                           </span>

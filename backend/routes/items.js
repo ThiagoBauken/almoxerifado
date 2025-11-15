@@ -26,10 +26,13 @@ router.get('/', async (req, res) => {
 
     let query = `
       SELECT i.*, c.nome as categoria_nome, c.icone as categoria_icone,
-             l.codigo as local_codigo, l.descricao as local_descricao, l.tipo as local_tipo
+             l.codigo as local_codigo, l.descricao as local_descricao, l.tipo as local_tipo,
+             u.nome as funcionario_nome, o.nome as obra_nome
       FROM items i
       LEFT JOIN categories c ON i.categoria_id = c.id
       LEFT JOIN locais_armazenamento l ON i.local_armazenamento_id = l.id
+      LEFT JOIN users u ON i.funcionario_id = u.id
+      LEFT JOIN obras o ON i.obra_id = o.id
       WHERE i.organization_id = $1
     `;
     const params = [req.user.organization_id];
