@@ -33,11 +33,10 @@ async function up() {
       WHERE max_uses IS NULL;
     `);
 
-    // Adicionar índice para melhor performance
+    // Adicionar índice para melhor performance (índice composto ao invés de parcial)
     await client.query(`
-      CREATE INDEX IF NOT EXISTS idx_invites_token_active
-      ON invites(token)
-      WHERE accepted_at IS NULL;
+      CREATE INDEX IF NOT EXISTS idx_invites_token_accepted
+      ON invites(token, accepted_at);
     `);
 
     await client.query('COMMIT');

@@ -253,11 +253,11 @@ export default function Transfers() {
         if (item.funcionario_id !== currentUser.id) return false;
       } else if (filterOrigem === 'estoque') {
         // Mostrar apenas itens do ESTOQUE/ALMOXARIFADO
+        // CORREÇÃO: Removido 'disponivel' - apenas 'disponivel_estoque' indica que está no estoque
         const isInStock =
-          item.estado === 'disponivel' ||
           item.estado === 'disponivel_estoque' ||
-          item.localizacao_tipo === 'almoxarifado' ||
-          item.localizacao_tipo === 'estoque';
+          (item.localizacao_tipo === 'almoxarifado' && !item.funcionario_id) ||
+          (item.localizacao_tipo === 'estoque' && !item.funcionario_id);
         if (!isInStock) return false;
       } else if (filterOrigem === 'outros_funcionarios') {
         // Mostrar apenas itens que estão COM OUTROS FUNCIONÁRIOS (não o usuário atual e não no estoque)

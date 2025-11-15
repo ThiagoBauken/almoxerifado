@@ -408,31 +408,50 @@ router.put('/:id', requireAlmoxarife, async (req, res) => {
 // ==================== DELETAR ITEM ====================
 
 router.delete('/:id', requireAlmoxarife, async (req, res) => {
+  const client = await pool.connect();
+
   try {
     const { id } = req.params;
 
-    const result = await pool.query(
-      'DELETE FROM items WHERE id = $1 AND organization_id = $2 RETURNING *',
+    await client.query('BEGIN');
+
+    // Verificar se item existe e pertence à organização
+    const itemCheck = await client.query(
+      'SELECT * FROM items WHERE id = $1 AND organization_id = $2',
       [id, req.user.organization_id]
     );
 
-    if (result.rows.length === 0) {
+    if (itemCheck.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({
         success: false,
         message: 'Item não encontrado',
       });
     }
 
+    // Deletar item - transferências relacionadas terão item_id = NULL automaticamente
+    // graças ao ON DELETE SET NULL na foreign key (migration 022)
+    const result = await client.query(
+      'DELETE FROM items WHERE id = $1 RETURNING *',
+      [id]
+    );
+
+    await client.query('COMMIT');
+
     res.json({
       success: true,
       message: 'Item deletado com sucesso',
+      data: result.rows[0],
     });
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('Erro ao deletar item:', error);
     res.status(500).json({
       success: false,
-      message: 'Erro ao deletar item',
+      message: 'Erro ao deletar item: ' + error.message,
     });
+  } finally {
+    client.release();
   }
 });
 

@@ -228,11 +228,18 @@ router.post(
         });
       }
 
-      // Verificar se é ADMIN transferindo item de OUTRO funcionário
+      // Verificar se é ADMIN transferindo item de OUTRO funcionário OU retirando do ESTOQUE
+      // Admin pode fazer transferência automática se:
+      // 1. Está transferindo item de OUTRO funcionário, OU
+      // 2. Está retirando item do ESTOQUE (para si mesmo ou para outro)
       const isAdminTransfer =
         ['admin', 'gestor', 'almoxarife'].includes(req.user.perfil) &&
-        item.funcionario_id &&
-        item.funcionario_id !== req.user.id;
+        (
+          // Caso 1: Item está com outro funcionário
+          (item.funcionario_id && item.funcionario_id !== req.user.id) ||
+          // Caso 2: Item no estoque e admin está retirando (para si ou para outro)
+          (!item.funcionario_id && item.estado === 'disponivel_estoque')
+        );
 
       // Status inicial: automático para admins, pendente para funcionários
       const initialStatus = isAdminTransfer ? 'concluida' : 'pendente';
